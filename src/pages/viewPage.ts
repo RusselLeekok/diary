@@ -1,0 +1,214 @@
+import { getEntryById, trashEntry } from '../services/databaseService';
+import { refreshEntries, getAllTagsList } from '../store/appStore';
+import { navigate } from '../router/router';
+import { MOOD_CONFIG } from '../types';
+import { formatDisplayDate, formatRelativeTime } from '../utils/dateUtils';
+import { getCategoryColor, UNCATEGORIZED_COLOR } from '../utils/categoryUtils';
+import { showModal } from '../components/modal';
+import { showToast } from '../components/toast';
+import { escapeHtml, sanitizeDiaryContent } from '../utils/htmlUtils';
+
+/**
+ * 渲染阅读日记页面
+ * 布局：顶部操作栏固定（含返回/删除/编辑），下方内容区独立滚动
+ * 页框大小与编辑器/列表页完全统一，不会动态扩缩
+ */
+export async function renderViewPage(mainEl: HTMLElement, params?: Record<string, string>): Promise<void> {
+  const id = params?.id || '';
+
+  const renderError = (msg = '未找到该日记') => {
+    mainEl.innerHTML = `
+      <div class="page-view">
+        <div class="view-topbar">
+          <button class="btn btn-ghost view-back" id="view-back-err">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+            返回列表
+          </button>
+        </div>
+        <div class="view-scroll">
+          <div class="view-inner">
+            <div class="view-error-state">
+              <span style="font-size: 2.5rem; display: block; margin-bottom: 8px;">🔍</span>
+              <h3>${escapeHtml(msg)}</h3>
+              <button class="btn btn-primary" id="view-back-list">返回列表</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    mainEl.querySelector('#view-back-err')?.addEventListener('click', () => navigate('list'));
+    mainEl.querySelector('#view-back-list')?.addEventListener('click', () => navigate('list'));
+  };
+
+  if (!id) { renderError(); return; }
+
+  const entry = await getEntryById(id);
+  if (!entry) { renderError(); return; }
+
+  const mood = MOOD_CONFIG[entry.mood] ?? MOOD_CONFIG.none;
+  const currentCategory = entry.tags[0] ?? '';
+  const allTags = getAllTagsList();
+  const catColor = currentCategory ? getCategoryColor(allTags, currentCategory) : UNCATEGORIZED_COLOR;
+  const safeTitle = escapeHtml(entry.title || '无标题');
+  const safeDateText = escapeHtml(`${formatDisplayDate(entry.dateFor)}${entry.timeFor ? ' ' + entry.timeFor : ''}`);
+  const safeCategory = escapeHtml(currentCategory || '未分类');
+  const safeContent = entry.content
+    ? sanitizeDiaryContent(entry.content)
+    : '<p style="color:var(--text-muted);font-style:italic">这篇日记没有正文内容。</p>';
+
+  mainEl.innerHTML = `
+    <div class="page-view">
+
+      <!-- ★ 顶部固定操作栏（与编辑器顶栏同款） -->
+      <div class="view-topbar">
+        <button class="btn btn-ghost view-back" id="view-back" title="返回列表">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          返回列表
+        </button>
+        <div class="view-actions">
+          <button class="btn btn-ghost view-action-btn view-delete" id="view-trash" title="移入垃圾箱">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+            </svg>
+            删除
+          </button>
+          <button class="btn btn-primary view-action-btn" id="view-edit" title="编辑日记">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+            编辑日记
+          </button>
+        </div>
+      </div>
+
+      <!-- ★ 下方独立滚动区 -->
+      <div class="view-scroll">
+        <div class="view-inner">
+
+          <!-- 日记主体卡片 -->
+          <article class="view-card">
+            <header class="view-header">
+              <h1 class="view-title">${safeTitle}</h1>
+              <div class="view-meta">
+                <div class="view-meta-item">
+                  <span class="view-meta-icon">📅</span>
+                  <span>${safeDateText}</span>
+                </div>
+                <div class="view-meta-item">
+                  <span class="view-meta-icon">⏱️</span>
+                  <span>${formatRelativeTime(entry.updatedAt)}修改</span>
+                </div>
+                <div class="view-meta-item">
+                  <span class="view-meta-icon">✍️</span>
+                  <span>${Number(entry.wordCount) || 0} 字</span>
+                </div>
+              </div>
+              <div class="view-status-row">
+                <div class="view-mood-tag" style="background:${mood.color}15;color:${mood.color}">
+                  <span>${mood.emoji}</span>
+                  <span>${mood.label}</span>
+                </div>
+                <div class="view-cat-tag">
+                  <span class="view-cat-dot" style="background:${catColor}"></span>
+                  <span>${safeCategory}</span>
+                </div>
+              </div>
+            </header>
+
+            <div class="view-divider"></div>
+
+            <!-- 正文（继承 Quill 富文本排版样式） -->
+            <div class="view-content ql-editor">
+              ${safeContent}
+            </div>
+          </article>
+
+        </div>
+      </div>
+
+    </div>
+  `;
+
+  mainEl.querySelector('#view-back')?.addEventListener('click', () => navigate('list'));
+
+  mainEl.querySelector('#view-edit')?.addEventListener('click', () => {
+    navigate('editor', { id });
+  });
+
+  mainEl.querySelector('#view-trash')?.addEventListener('click', () => {
+    showModal({
+      title: '移入垃圾箱',
+      content: '确定要将这篇日记移入垃圾箱吗？您可以在垃圾箱中找回它。',
+      confirmText: '移入垃圾箱',
+      confirmClass: 'btn-danger',
+      onConfirm: async () => {
+        await trashEntry(id);
+        await refreshEntries();
+        showToast('日记已移入垃圾箱 ✓', { type: 'success' });
+        navigate('list');
+      },
+    });
+  });
+
+  // 绑定图片点击大图预览 (Lightbox)
+  const images = mainEl.querySelectorAll('.view-content img');
+  images.forEach(img => {
+    (img as HTMLElement).style.cursor = 'zoom-in';
+    img.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showImageLightbox((img as HTMLImageElement).src);
+    });
+  });
+}
+
+/** 显示大图灯箱预览 */
+function showImageLightbox(src: string): void {
+  // 检查是否已有灯箱，如果有则先移除
+  document.querySelector('.image-lightbox')?.remove();
+
+  const lightbox = document.createElement('div');
+  lightbox.className = 'image-lightbox';
+  lightbox.innerHTML = `
+    <div class="lightbox-overlay"></div>
+    <div class="lightbox-content">
+      <img src="${escapeHtml(src)}" class="lightbox-image" alt="大图预览" />
+      <button class="lightbox-close-btn" title="关闭">✕</button>
+    </div>
+  `;
+
+  document.body.appendChild(lightbox);
+
+  // 强制重绘以触发入场动画
+  lightbox.getBoundingClientRect();
+  lightbox.classList.add('active');
+
+  const closeLightbox = () => {
+    lightbox.classList.remove('active');
+    lightbox.classList.add('fade-out');
+    // 渐隐动画结束后移除
+    setTimeout(() => {
+      lightbox.remove();
+    }, 220);
+    document.removeEventListener('keydown', handleEsc);
+  };
+
+  // 挂载关闭句柄到 DOM 节点上，以便路由跳转时自动清理
+  (lightbox as any).closeLightbox = closeLightbox;
+
+  const handleEsc = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      closeLightbox();
+    }
+  };
+
+  // 绑定事件
+  lightbox.querySelector('.lightbox-overlay')?.addEventListener('click', closeLightbox);
+  lightbox.querySelector('.lightbox-close-btn')?.addEventListener('click', closeLightbox);
+  lightbox.querySelector('.lightbox-image')?.addEventListener('click', closeLightbox); // 点击图片也可关闭
+  document.addEventListener('keydown', handleEsc);
+}
