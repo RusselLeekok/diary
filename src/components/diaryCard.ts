@@ -3,7 +3,8 @@ import { MOOD_CONFIG } from '../types';
 import { formatDisplayDate, formatRelativeTime } from '../utils/dateUtils';
 import { navigate } from '../router/router';
 import { trashEntry } from '../services/databaseService';
-import { refreshEntries } from '../store/appStore';
+import { refreshEntries, getAllTagsList } from '../store/appStore';
+import { getCategoryColor } from '../utils/categoryUtils';
 import { showModal } from './modal';
 import { showToast } from './toast';
 import { escapeHtml, sanitizeDiaryContent } from '../utils/htmlUtils';
@@ -16,9 +17,11 @@ function extractFirstImageUrl(html: string): string | null {
 /** 渲染单张日记卡片 HTML */
 export function renderDiaryCard(entry: DiaryEntry): string {
   const mood = MOOD_CONFIG[entry.mood] ?? MOOD_CONFIG.none;
-  const tags = entry.tags.slice(0, 3).map(t =>
-    `<span class="tag-chip">#${escapeHtml(t)}</span>`
-  ).join('');
+  const allTags = getAllTagsList();
+  const tags = entry.tags.slice(0, 3).map(t => {
+    const color = getCategoryColor(allTags, t);
+    return `<span class="tag-chip"><span class="tag-chip-dot" style="background:${color}"></span>${escapeHtml(t)}</span>`;
+  }).join('');
   const preview = entry.plainText.slice(0, 100).replace(/\n/g, ' ');
   const displayTime = entry.timeFor ? ` ${entry.timeFor}` : '';
   const displayDateText = `${formatDisplayDate(entry.dateFor)}${displayTime}`;

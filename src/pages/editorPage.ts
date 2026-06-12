@@ -19,6 +19,10 @@ let quill: Quill | null = null;
 let autoSaveTimer: ReturnType<typeof setInterval> | null = null;
 let dtPicker: DateTimePicker | null = null;
 let editorDocumentClickHandler: ((e: MouseEvent) => void) | null = null;
+let editorKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
+
+type TextRange = { index: number; length: number };
+type ColorPreviewFormat = 'color' | 'background';
 
 /** 生成 UUID */
 function generateId(): string {
@@ -186,6 +190,20 @@ export async function renderEditorPage(mainEl: HTMLElement, params?: Record<stri
           <!-- 隐藏的 file input -->
           <input type="file" id="ql-image-input" accept="image/*" style="display:none" />
         </div>
+        <div class="editor-link-popover" id="editor-link-popover" hidden>
+          <span class="editor-link-label">链接</span>
+          <input
+            class="editor-link-input"
+            id="editor-link-input"
+            type="url"
+            placeholder="https://example.com"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button class="editor-link-action" id="editor-link-apply" type="button">应用</button>
+          <button class="editor-link-action editor-link-remove" id="editor-link-remove" type="button">移除</button>
+          <button class="editor-link-icon" id="editor-link-cancel" type="button" title="关闭">×</button>
+        </div>
         <div id="quill-editor"></div>
       </div>
     </div>
@@ -274,12 +292,29 @@ function bindEditorEvents(
   let selectedMood: MoodType = loadedEntry?.mood && loadedEntry.mood in MOOD_CONFIG ? loadedEntry.mood : 'none';
   // 单选分类（存入 tags[0]）
   let selectedCategory: string = initCategory;
+  let lastEditorSelection: TextRange | null = null;
+  let lastTextSelection: TextRange | null = null;
+  let formatPreviewState: {
+    format: ColorPreviewFormat;
+    range: TextRange;
+    contents: unknown;
+    committed: boolean;
+  } | null = null;
 
   const moodCurrent = container.querySelector('#mood-current')!;
   const moodDropdown = container.querySelector('#mood-dropdown') as HTMLElement;
   const catPickerDropdown = container.querySelector('#cat-picker-dropdown') as HTMLElement;
   const catPickerLabel = container.querySelector('#cat-picker-label') as HTMLElement;
   const catPickerDot = container.querySelector('.cat-picker-trigger .cat-dot') as HTMLElement;
+  const pageEditor = container.querySelector('.page-editor') as HTMLElement | null;
+  const quillToolbar = container.querySelector('#quill-toolbar') as HTMLElement | null;
+  const linkPopover = container.querySelector('#editor-link-popover') as HTMLElement | null;
+  const linkInput = container.querySelector('#editor-link-input') as HTMLInputElement | null;
+  const linkApply = container.querySelector('#editor-link-apply') as HTMLButtonElement | null;
+  const linkRemove = container.querySelector('#editor-link-remove') as HTMLButtonElement | null;
+  const linkCancel = container.querySelector('#editor-link-cancel') as HTMLButtonElement | null;
+  const linkButton = container.querySelector('.ql-link') as HTMLButtonElement | null;
+  let linkEditRange: TextRange | null = null;
 
   // 初始化自定义日期时间选择器
   const dtContainer = container.querySelector('#dt-picker-container') as HTMLElement;
@@ -296,6 +331,7 @@ function bindEditorEvents(
   // --------- 保存函数 ---------
   async function doSave(showIndicator: boolean = false): Promise<DiaryEntry | null> {
     if (!quill || !dtPicker) return null;
+    if (formatPreviewState && !formatPreviewState.committed) return null;
     // 若编辑器容器已不在 DOM 中（页面已切换），自动清除定时器并跳过保存
     if (!document.body.contains(container)) {
       clearAutoSave();
@@ -348,8 +384,282 @@ function bindEditorEvents(
     return '保存失败，请稍后再试';
   }
 
+  function getActiveTextSelection(): TextRange | null {
+    if (!quill) return null;
+    const current = quill.getSelection();
+    if (current && current.length > 0) {
+      lastTextSelection = { index: current.index, length: current.length };
+      return lastTextSelection;
+    }
+    return lastTextSelection;
+  }
+
+  function normalizeLinkUrl(value: string): string | null {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(trimmed) || trimmed.startsWith('#') || trimmed.startsWith('/')
+      ? trimmed
+      : `https://${trimmed}`;
+    if (/^(?:https?:|mailto:|tel:|#|\/)/i.test(withScheme)) return withScheme;
+    return null;
+  }
+
+  function getLinkValueAt(index: number): string | null {
+    if (!quill) return null;
+    const format = quill.getFormat(index, 1) as Record<string, unknown>;
+    return typeof format.link === 'string' ? format.link : null;
+  }
+
+  function getLinkRangeAt(index: number): { range: TextRange; href: string } | null {
+    if (!quill) return null;
+    const textEnd = quill.getLength() - 1;
+    if (textEnd <= 0) return null;
+
+    let pos = Math.min(Math.max(index, 0), textEnd - 1);
+    let href = getLinkValueAt(pos);
+    if (!href && pos > 0) {
+      pos -= 1;
+      href = getLinkValueAt(pos);
+    }
+    if (!href) return null;
+
+    let start = pos;
+    while (start > 0 && getLinkValueAt(start - 1) === href) start -= 1;
+
+    let end = pos + 1;
+    while (end < textEnd && getLinkValueAt(end) === href) end += 1;
+
+    return { range: { index: start, length: end - start }, href };
+  }
+
+  function getSelectedLinkValue(range: TextRange): string {
+    if (!quill || range.length <= 0) return '';
+    const format = quill.getFormat(range.index, range.length) as Record<string, unknown>;
+    if (typeof format.link === 'string') return format.link;
+    const first = getLinkValueAt(range.index);
+    return first || '';
+  }
+
+  function positionLinkPopover(): void {
+    if (!linkPopover || !linkButton) return;
+    const wrapper = container.querySelector('.quill-wrapper') as HTMLElement | null;
+    if (!wrapper) return;
+
+    const wrapperRect = wrapper.getBoundingClientRect();
+    const buttonRect = linkButton.getBoundingClientRect();
+    const popoverWidth = Math.min(linkPopover.offsetWidth || 420, wrapperRect.width - 24);
+    const left = Math.max(12, Math.min(buttonRect.left - wrapperRect.left - 180, wrapperRect.width - popoverWidth - 12));
+    const top = buttonRect.bottom - wrapperRect.top + 8;
+    linkPopover.style.left = `${left}px`;
+    linkPopover.style.top = `${top}px`;
+  }
+
+  function closeLinkEditor(restoreSelection = false): void {
+    if (!linkPopover) return;
+    linkPopover.hidden = true;
+    linkPopover.classList.remove('visible');
+    if (restoreSelection && quill && linkEditRange) {
+      quill.setSelection(linkEditRange.index, linkEditRange.length, 'silent');
+    }
+    linkEditRange = null;
+  }
+
+  function openLinkEditor(): void {
+    if (!quill || !linkPopover || !linkInput || !linkRemove) return;
+    restoreFormatPreview();
+
+    const current = quill.getSelection();
+    const selected = current && current.length > 0
+      ? { index: current.index, length: current.length }
+      : getActiveTextSelection();
+    const cursor = current || lastEditorSelection;
+    const existingLink = cursor ? getLinkRangeAt(cursor.index) : null;
+    const range = selected && selected.length > 0 ? selected : existingLink?.range || null;
+
+    if (!range || range.length <= 0) {
+      showToast('请先选中文字，或把光标放在已有链接上', { type: 'warning' });
+      closeLinkEditor();
+      return;
+    }
+
+    const href = existingLink && existingLink.range.index === range.index && existingLink.range.length === range.length
+      ? existingLink.href
+      : getSelectedLinkValue(range);
+
+    linkEditRange = range;
+    lastTextSelection = range;
+    quill.setSelection(range.index, range.length, 'silent');
+    linkInput.value = href;
+    linkRemove.hidden = !href;
+    linkPopover.hidden = false;
+    linkPopover.classList.add('visible');
+    positionLinkPopover();
+    window.setTimeout(() => {
+      linkInput.focus();
+      linkInput.select();
+    }, 0);
+  }
+
+  function applyLinkEditor(): void {
+    if (!quill || !linkInput || !linkEditRange) return;
+    const href = normalizeLinkUrl(linkInput.value);
+    if (!href) {
+      showToast('请输入有效链接', { type: 'warning' });
+      linkInput.focus();
+      return;
+    }
+    const { index, length } = linkEditRange;
+    quill.formatText(index, length, 'link', href, 'user');
+    quill.setSelection(index + length, 0, 'silent');
+    closeLinkEditor();
+  }
+
+  function removeLinkEditor(): void {
+    if (!quill || !linkEditRange) return;
+    const { index, length } = linkEditRange;
+    quill.formatText(index, length, 'link', false, 'user');
+    quill.setSelection(index + length, 0, 'silent');
+    closeLinkEditor();
+  }
+
+  function bindLinkEditor(): void {
+    const toolbar = quill?.getModule('toolbar') as { addHandler?: (name: string, handler: () => void) => void } | null;
+    toolbar?.addHandler?.('link', openLinkEditor);
+
+    linkApply?.addEventListener('click', applyLinkEditor);
+    linkRemove?.addEventListener('click', removeLinkEditor);
+    linkCancel?.addEventListener('click', () => closeLinkEditor(true));
+    linkInput?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        applyLinkEditor();
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeLinkEditor(true);
+      }
+    });
+  }
+
+  function enterFormatPreview(format: ColorPreviewFormat): boolean {
+    if (!quill) return false;
+    if (formatPreviewState?.format === format) {
+      pageEditor?.classList.add('is-format-previewing');
+      return true;
+    }
+    restoreFormatPreview();
+
+    const range = getActiveTextSelection();
+    if (!range || range.length <= 0) return false;
+    formatPreviewState = {
+      format,
+      range,
+      contents: quill.getContents(range.index, range.length),
+      committed: false,
+    };
+    pageEditor?.classList.add('is-format-previewing');
+    quill.setSelection(range.index, range.length, 'silent');
+    return true;
+  }
+
+  function previewFormatValue(format: ColorPreviewFormat, value: string | null): void {
+    if (!quill || !enterFormatPreview(format) || !formatPreviewState) return;
+    const { range } = formatPreviewState;
+    quill.setSelection(range.index, range.length, 'silent');
+    quill.formatText(range.index, range.length, format, value || false, 'silent');
+  }
+
+  function restoreFormatPreview(): void {
+    if (!quill || !formatPreviewState || formatPreviewState.committed) {
+      pageEditor?.classList.remove('is-format-previewing');
+      formatPreviewState = null;
+      return;
+    }
+
+    const Delta = Quill.import('delta') as any;
+    const { range, contents } = formatPreviewState;
+    quill.updateContents(new Delta().retain(range.index).delete(range.length).concat(contents), 'silent');
+    quill.setSelection(range.index, range.length, 'silent');
+    pageEditor?.classList.remove('is-format-previewing');
+    formatPreviewState = null;
+  }
+
+  function commitFormatPreview(): void {
+    if (!formatPreviewState) return;
+    const { range } = formatPreviewState;
+    formatPreviewState.committed = true;
+    quill?.setSelection(range.index + range.length, 0, 'silent');
+    pageEditor?.classList.remove('is-format-previewing');
+    formatPreviewState = null;
+  }
+
+  function bindColorPreviewPicker(format: ColorPreviewFormat): void {
+    if (!quillToolbar) return;
+    const picker = quillToolbar.querySelector(`.ql-picker.ql-${format}`) as HTMLElement | null;
+    if (!picker) return;
+
+    picker.addEventListener('mousedown', (event) => {
+      const item = (event.target as Element | null)?.closest('.ql-picker-item') as HTMLElement | null;
+      if (!item || !picker.contains(item)) return;
+      previewFormatValue(format, item.getAttribute('data-value'));
+      commitFormatPreview();
+    }, true);
+
+    picker.addEventListener('click', (event) => {
+      const label = (event.target as Element | null)?.closest('.ql-picker-label');
+      if (!label || !picker.contains(label)) return;
+      enterFormatPreview(format);
+      window.setTimeout(() => {
+        if (!picker.classList.contains('ql-expanded') && formatPreviewState?.format === format) {
+          restoreFormatPreview();
+        }
+      }, 0);
+    });
+
+    picker.addEventListener('mouseover', (event) => {
+      const item = (event.target as Element | null)?.closest('.ql-picker-item') as HTMLElement | null;
+      if (!item || !picker.contains(item)) return;
+      previewFormatValue(format, item.getAttribute('data-value'));
+    });
+
+    picker.addEventListener('mouseleave', () => {
+      if (formatPreviewState?.format === format && !formatPreviewState.committed) {
+        restoreFormatPreview();
+      }
+    });
+  }
+
+  function bindFormatPreviewEvents(): void {
+    bindColorPreviewPicker('color');
+    bindColorPreviewPicker('background');
+
+    quillToolbar?.addEventListener('mousedown', (event) => {
+      const target = event.target as Element | null;
+      if (target?.closest('.ql-color, .ql-background')) return;
+      restoreFormatPreview();
+    });
+
+    editorKeydownHandler = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        restoreFormatPreview();
+        closeLinkEditor(true);
+      }
+    };
+    document.addEventListener('keydown', editorKeydownHandler);
+  }
+
   // 仅在输入文字时更新字数，不再触发防抖保存
   quill.on('text-change', () => { updateWordCount(); });
+  quill.on('selection-change', (range: TextRange | null) => {
+    if (range) {
+      lastEditorSelection = { index: range.index, length: range.length };
+    }
+    if (range && range.length > 0) {
+      lastTextSelection = { index: range.index, length: range.length };
+    }
+  });
+  bindFormatPreviewEvents();
+  bindLinkEditor();
 
   // 开启每 15 秒一次的后台悄悄保存（无提示，页面切走后自动停止）
   autoSaveTimer = setInterval(async () => {
@@ -528,6 +838,17 @@ function bindEditorEvents(
     if (!container.querySelector('#cat-picker')?.contains(e.target as Node)) {
       catPickerDropdown.hidden = true;
     }
+    if (!quillToolbar?.contains(e.target as Node)) {
+      restoreFormatPreview();
+    }
+    if (
+      linkPopover &&
+      !linkPopover.hidden &&
+      !linkPopover.contains(e.target as Node) &&
+      !linkButton?.contains(e.target as Node)
+    ) {
+      closeLinkEditor();
+    }
   };
   document.addEventListener('click', editorDocumentClickHandler);
 }
@@ -537,6 +858,10 @@ function clearAutoSave(): void {
   if (editorDocumentClickHandler) {
     document.removeEventListener('click', editorDocumentClickHandler);
     editorDocumentClickHandler = null;
+  }
+  if (editorKeydownHandler) {
+    document.removeEventListener('keydown', editorKeydownHandler);
+    editorKeydownHandler = null;
   }
   if (dtPicker) {
     dtPicker.destroy();

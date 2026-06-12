@@ -3,9 +3,24 @@ import { renderDiaryCard, bindCardEvents } from '../components/diaryCard';
 import { navigate } from '../router/router';
 import type { DiaryEntry, MoodType } from '../types';
 import { MOOD_CONFIG } from '../types';
-import { buildCategoryStats } from '../utils/categoryUtils';
+import { buildCategoryStats, getCategoryColor } from '../utils/categoryUtils';
 import { showCategoryModal } from '../components/categoryModal';
 import { escapeHtml } from '../utils/htmlUtils';
+import { DateTimePicker } from '../components/dateTimePicker';
+
+let filterDatePickerFrom: DateTimePicker | null = null;
+let filterDatePickerTo: DateTimePicker | null = null;
+
+function destroyFilterPickers() {
+  if (filterDatePickerFrom) {
+    filterDatePickerFrom.destroy();
+    filterDatePickerFrom = null;
+  }
+  if (filterDatePickerTo) {
+    filterDatePickerTo.destroy();
+    filterDatePickerTo = null;
+  }
+}
 
 // ====================================================
 // 列表页状态
@@ -33,6 +48,7 @@ function debounce(fn: () => void, delay: number) {
 }
 
 export async function renderListPage(mainEl: HTMLElement, params?: Record<string, string>): Promise<void> {
+  destroyFilterPickers();
   await refreshEntries();
   currentEntries = getEntries();
 
@@ -164,7 +180,13 @@ function buildSearchPanelHTML(): string {
         <div class="filter-tags-list">
           ${allTags.map(t => {
             const isActive = searchTags.includes(t);
-            return `<button class="filter-tag-btn ${isActive ? 'active' : ''}" data-tag="${escapeHtml(t)}" type="button">#${escapeHtml(t)}</button>`;
+            const color = getCategoryColor(allTags, t);
+            return `
+              <button class="filter-tag-btn ${isActive ? 'active' : ''}" data-tag="${escapeHtml(t)}" type="button">
+                <span class="filter-tag-dot" style="background:${color}"></span>
+                ${escapeHtml(t)}
+              </button>
+            `;
           }).join('')}
         </div>
       </div>
@@ -214,9 +236,9 @@ function buildSearchPanelHTML(): string {
           <div class="filter-field">
             <label class="filter-label">日期区间</label>
             <div class="filter-date-inputs">
-              <input type="date" id="filter-date-from" class="filter-date-input" value="${escapeHtml(searchDateFrom)}" />
+              <div id="filter-date-from-container" class="dt-picker-container"></div>
               <span class="filter-date-to-sep">至</span>
-              <input type="date" id="filter-date-to" class="filter-date-input" value="${escapeHtml(searchDateTo)}" />
+              <div id="filter-date-to-container" class="dt-picker-container"></div>
             </div>
           </div>
 
@@ -496,17 +518,37 @@ function bindPageEvents(container: HTMLElement): void {
     });
   });
 
-  // 绑定日期区间
-  const dateFromEl = container.querySelector('#filter-date-from') as HTMLInputElement | null;
-  const dateToEl = container.querySelector('#filter-date-to') as HTMLInputElement | null;
-  dateFromEl?.addEventListener('change', () => {
-    searchDateFrom = dateFromEl.value;
-    updateFilteredResults(container);
-  });
-  dateToEl?.addEventListener('change', () => {
-    searchDateTo = dateToEl.value;
-    updateFilteredResults(container);
-  });
+  // 绑定日期区间（使用自定义 DateTimePicker）
+  const dateFromContainer = container.querySelector('#filter-date-from-container') as HTMLElement | null;
+  const dateToContainer = container.querySelector('#filter-date-to-container') as HTMLElement | null;
+
+  if (dateFromContainer && dateToContainer) {
+    filterDatePickerFrom = new DateTimePicker({
+      initialDate: searchDateFrom,
+      container: dateFromContainer,
+      dateOnly: true,
+      allowEmpty: true,
+      placeholder: '年/月/日',
+      triggerClass: 'filter-date-input',
+      onChange: (date) => {
+        searchDateFrom = date;
+        updateFilteredResults(container);
+      }
+    });
+
+    filterDatePickerTo = new DateTimePicker({
+      initialDate: searchDateTo,
+      container: dateToContainer,
+      dateOnly: true,
+      allowEmpty: true,
+      placeholder: '年/月/日',
+      triggerClass: 'filter-date-input',
+      onChange: (date) => {
+        searchDateTo = date;
+        updateFilteredResults(container);
+      }
+    });
+  }
 
   // 绑定标签多选
   container.querySelectorAll('.filter-tag-btn').forEach(btn => {
@@ -728,10 +770,8 @@ function resetAllFilters(container: HTMLElement): void {
   // 复位高级筛选区 UI
   container.querySelectorAll('.filter-mood-btn').forEach(b => b.classList.remove('active'));
   container.querySelectorAll('.filter-tag-btn').forEach(b => b.classList.remove('active'));
-  const dateFromEl = container.querySelector('#filter-date-from') as HTMLInputElement | null;
-  const dateToEl = container.querySelector('#filter-date-to') as HTMLInputElement | null;
-  if (dateFromEl) dateFromEl.value = '';
-  if (dateToEl) dateToEl.value = '';
+  if (filterDatePickerFrom) filterDatePickerFrom.setDate('');
+  if (filterDatePickerTo) filterDatePickerTo.setDate('');
 
   const searchInput = container.querySelector('#search-keyword') as HTMLInputElement | null;
   if (searchInput) searchInput.value = '';

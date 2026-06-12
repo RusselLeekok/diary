@@ -811,7 +811,7 @@ body {
 .tag-chip {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   font-size: 0.7rem;
   color: var(--accent);
   background: var(--accent-bg);
@@ -819,6 +819,14 @@ body {
   padding: 2px 8px;
   border: 1px solid transparent;
   font-weight: 500;
+}
+
+.tag-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
 }
 .tag-chip.editable .tag-remove {
   background: none;
@@ -1106,6 +1114,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
   background: linear-gradient(180deg, var(--bg-card) 0%, var(--bg-input) 100%);
 }
 
@@ -1208,6 +1217,142 @@ body {
   width: 18px !important;
   height: 18px !important;
   border: 1px solid var(--border-light);
+  background-clip: padding-box;
+}
+
+#quill-toolbar .ql-picker.ql-color .ql-picker-item:not([data-value]) {
+  background: #232323 !important;
+}
+
+#quill-toolbar .ql-picker.ql-color .ql-picker-item[data-value="#7a5f33"] {
+  background: #7a5f33 !important;
+}
+
+#quill-toolbar .ql-picker.ql-color .ql-picker-item[data-value="#b94040"] {
+  background: #b94040 !important;
+}
+
+#quill-toolbar .ql-picker.ql-color .ql-picker-item[data-value="#2f7d62"] {
+  background: #2f7d62 !important;
+}
+
+#quill-toolbar .ql-picker.ql-color .ql-picker-item[data-value="#3f6f96"] {
+  background: #3f6f96 !important;
+}
+
+#quill-toolbar .ql-picker.ql-color .ql-picker-item[data-value="#8e5f6e"] {
+  background: #8e5f6e !important;
+}
+
+#quill-toolbar .ql-picker.ql-color .ql-picker-item[data-value="#6b5c44"] {
+  background: #6b5c44 !important;
+}
+
+#quill-toolbar .ql-picker.ql-background .ql-picker-item:not([data-value]) {
+  background: linear-gradient(135deg, transparent 44%, #c8bda9 46%, #c8bda9 54%, transparent 56%), #fff !important;
+}
+
+#quill-toolbar .ql-picker.ql-background .ql-picker-item[data-value="#f0e4c8"] {
+  background: #f0e4c8 !important;
+}
+
+#quill-toolbar .ql-picker.ql-background .ql-picker-item[data-value="#f9e8e8"] {
+  background: #f9e8e8 !important;
+}
+
+#quill-toolbar .ql-picker.ql-background .ql-picker-item[data-value="#e2ede1"] {
+  background: #e2ede1 !important;
+}
+
+#quill-toolbar .ql-picker.ql-background .ql-picker-item[data-value="#def0fa"] {
+  background: #def0fa !important;
+}
+
+#quill-toolbar .ql-picker.ql-background .ql-picker-item[data-value="#faecf0"] {
+  background: #faecf0 !important;
+}
+
+#quill-toolbar .ql-color-picker .ql-picker-item:hover,
+#quill-toolbar .ql-color-picker .ql-picker-item.ql-selected {
+  border-color: var(--text-primary);
+  box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 3px var(--accent);
+}
+
+.quill-wrapper .ql-tooltip {
+  display: none !important;
+}
+
+.editor-link-popover {
+  position: absolute;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(430px, calc(100% - 24px));
+  padding: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+}
+
+.editor-link-popover[hidden] {
+  display: none !important;
+}
+
+.editor-link-label {
+  flex: none;
+  color: var(--text-secondary);
+  font: 500 13px/1 var(--font-ui);
+}
+
+.editor-link-input {
+  flex: 1;
+  min-width: 120px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-xs);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font: 14px/1.4 var(--font-ui);
+  outline: none;
+}
+
+.editor-link-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.editor-link-action,
+.editor-link-icon {
+  flex: none;
+  height: 34px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--accent);
+  font: 500 14px/1 var(--font-ui);
+  cursor: pointer;
+}
+
+.editor-link-action {
+  padding: 0 10px;
+}
+
+.editor-link-action:hover,
+.editor-link-icon:hover {
+  background: var(--accent-bg);
+}
+
+.editor-link-remove {
+  color: var(--danger);
+}
+
+.editor-link-icon {
+  width: 34px;
+  color: var(--text-secondary);
+  font-size: 20px;
 }
 
 #quill-toolbar .ql-picker.ql-size .ql-picker-label[data-value="13px"]::before,
@@ -1260,12 +1405,21 @@ body {
 }
 
 .ql-editor ::selection {
-  background: rgba(196, 164, 110, 0.07);
+  background: rgba(196, 164, 110, 0.2);
+}
+
+.page-editor.is-format-previewing .ql-editor ::selection {
+  background: transparent;
 }
 
 .dark .ql-editor ::selection,
 [data-theme="dark"] .ql-editor ::selection {
   background: rgba(212, 180, 126, 0.2);
+}
+
+.dark .page-editor.is-format-previewing .ql-editor ::selection,
+[data-theme="dark"] .page-editor.is-format-previewing .ql-editor ::selection {
+  background: transparent;
 }
 
 .ql-editor p {
@@ -1658,7 +1812,7 @@ body {
   flex: none !important;
   overflow: visible !important;
   padding: 28px 36px 60px;
-  max-width: 910px;
+  max-width: 980px;
   margin: 0 auto;
   width: 100%;
 }
@@ -2508,6 +2662,16 @@ body {
   color: var(--accent);
 }
 
+.dt-clear-btn {
+  color: var(--danger);
+}
+
+.dt-clear-btn:hover {
+  background: var(--danger-light);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
 .dt-confirm-btn {
   background: var(--accent);
   color: #fff;
@@ -2618,6 +2782,7 @@ body {
 .search-advanced-filters.expanded {
   max-height: 500px;
   opacity: 1;
+  overflow: visible;
 }
 
 .advanced-filters-inner {
@@ -2714,6 +2879,9 @@ body {
 }
 
 .filter-tag-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 4px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -2724,6 +2892,19 @@ body {
   font-family: var(--font-ui);
   transition: all var(--duration) var(--ease);
   user-select: none;
+}
+
+.filter-tag-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+  transition: transform var(--duration) var(--ease), background var(--duration) var(--ease);
+}
+
+.filter-tag-btn.active .filter-tag-dot {
+  background: #fff !important;
 }
 
 .filter-tag-btn:hover {
