@@ -20,11 +20,20 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     headers.set('Content-Type', 'application/json');
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-    credentials: 'include',
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers,
+      credentials: 'include',
+    });
+  } catch (error) {
+    throw new ApiError(
+      0,
+      '无法连接到后端服务，请确认 API 服务正在运行；如果正文里有图片，也可能是内容太大导致连接中断。',
+      error,
+    );
+  }
 
   if (response.status === 204) {
     return undefined as T;

@@ -11,6 +11,8 @@ import {
 } from '../repositories.js';
 import { nowIso, toLocalDateString } from '../shared/date.js';
 
+const themeValues = ['light', 'dark', 'green', 'blue', 'pink', 'plain'] as const;
+
 const importEntrySchema = z.object({
   id: z.string().optional(),
   title: z.string().optional(),
@@ -32,7 +34,7 @@ const importEntrySchema = z.object({
 const importSchema = z.object({
   entries: z.array(importEntrySchema),
   config: z.object({
-    theme: z.enum(['light', 'dark']).optional(),
+    theme: z.enum(themeValues).optional(),
     fontSize: z.enum(['sm', 'md', 'lg', 'xl']).optional(),
     autoSaveInterval: z.number().int().optional(),
     categories: z.array(z.string()).optional(),

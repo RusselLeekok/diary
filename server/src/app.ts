@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
+import { config } from './config.js';
 import { openDatabase, type Database } from './db.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerSettingsRoutes } from './routes/settings.js';
@@ -14,8 +15,15 @@ export interface BuildAppOptions {
   db?: Database;
 }
 
+function isPayloadTooLargeError(error: unknown): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && 'statusCode' in error
+    && (error as { statusCode?: unknown }).statusCode === 413;
+}
+
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: true, bodyLimit: config.bodyLimitBytes });
   const db = options.db ?? openDatabase();
   app.decorate('db', db);
 
@@ -30,6 +38,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   app.setErrorHandler((error, _request, reply) => {
+    if (isPayloadTooLargeError(error)) {
+      return reply.status(413).send({
+        error: 'PAYLOAD_TOO_LARGE',
+        message: '内容太大，图片总大小已超过保存上限',
+      });
+    }
+
     if (error instanceof ZodError) {
       return reply.status(400).send({
         error: 'VALIDATION_ERROR',

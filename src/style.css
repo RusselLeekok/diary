@@ -1195,7 +1195,7 @@ body {
 }
 
 #quill-toolbar .ql-color-picker .ql-picker-options {
-  width: 154px !important;
+  width: 170px !important;
   grid-template-columns: repeat(7, 18px);
   gap: 5px;
 }
@@ -1257,6 +1257,15 @@ body {
   letter-spacing: 0;
   word-break: break-word;
   overflow-wrap: anywhere;
+}
+
+.ql-editor ::selection {
+  background: rgba(196, 164, 110, 0.07);
+}
+
+.dark .ql-editor ::selection,
+[data-theme="dark"] .ql-editor ::selection {
+  background: rgba(212, 180, 126, 0.2);
 }
 
 .ql-editor p {
@@ -1646,12 +1655,12 @@ body {
 
 /* ==================== 设置页 ==================== */
 .page-settings {
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-gutter: stable;
+  flex: none !important;
+  overflow: visible !important;
   padding: 28px 36px 60px;
-  max-width: 680px;
+  max-width: 910px;
   margin: 0 auto;
+  width: 100%;
 }
 
 .settings-sections { display: flex; flex-direction: column; gap: 20px; }
@@ -2891,8 +2900,8 @@ body {
 }
 
 .card-image-right {
-  width: 180px;
-  height: 120px;
+  width: 170px;
+  height: 170px;
   border-radius: var(--radius-md);
   overflow: hidden;
   flex-shrink: 0;
@@ -3195,6 +3204,45 @@ body {
     border-top: 1px solid var(--border-light);
     padding-top: 12px;
   }
+}
+
+/* ==================== 朴素白主题 ==================== */
+[data-theme="plain"] {
+  --bg-app: #f6f6f4;
+  --bg-topbar: rgba(255, 255, 255, 0.94);
+  --bg-card: #ffffff;
+  --bg-card-hover: #f7f7f5;
+  --bg-input: #ffffff;
+  --bg-overlay: rgba(28, 28, 26, 0.36);
+  --bg-tag: #eeeeeb;
+
+  --text-primary: #232323;
+  --text-secondary: #575757;
+  --text-muted: #8a8a85;
+  --text-placeholder: #b8b8b2;
+
+  --accent: #5f5f5a;
+  --accent-dark: #3f3f3b;
+  --accent-light: #9a9a92;
+  --accent-bg: #eeeeeb;
+  --accent-glow: rgba(80, 80, 74, 0.12);
+
+  --danger: #b94040;
+  --danger-light: #f8eaea;
+
+  --border: #d8d8d2;
+  --border-light: #ebebe7;
+  --border-strong: #b8b8af;
+
+  --shadow-xs: 0 1px 2px rgba(30,30,26,0.04);
+  --shadow-sm: 0 2px 8px rgba(30,30,26,0.05);
+  --shadow-md: 0 6px 24px rgba(30,30,26,0.07);
+  --shadow-lg: 0 16px 48px rgba(30,30,26,0.1);
+  --shadow-topbar: 0 1px 0 var(--border), 0 2px 12px rgba(30,30,26,0.05);
+}
+
+[data-theme="plain"] body {
+  background-image: none;
 }
 
 /* ==================== 绿色主题（清幽森绿） ==================== */

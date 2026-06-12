@@ -12,14 +12,26 @@ import { renderViewPage } from './pages/viewPage';
 import { renderTrashPage } from './pages/trashPage';
 import { escapeHtml } from './utils/htmlUtils';
 
+const THEME_VALUES = new Set(['light', 'dark', 'green', 'blue', 'pink', 'plain']);
+
+function getInitialTheme(): string {
+  const storedTheme = localStorage.getItem('diary-theme');
+  if (storedTheme && THEME_VALUES.has(storedTheme)) return storedTheme;
+  return getAppConfig().theme;
+}
+
 /** 应用入口 */
 async function bootstrap(): Promise<void> {
   // 初始化状态
   await initStore();
 
   // 应用已保存的主题
-  const savedTheme = localStorage.getItem('diary-theme') || getAppConfig().theme;
+  const savedTheme = getInitialTheme();
   document.documentElement.dataset.theme = savedTheme;
+  localStorage.setItem('diary-theme', savedTheme);
+  if (savedTheme !== 'dark') {
+    localStorage.setItem('diary-last-light-theme', savedTheme);
+  }
   if (savedTheme === 'dark') {
     document.documentElement.classList.add('dark');
   } else {

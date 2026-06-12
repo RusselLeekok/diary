@@ -66,8 +66,8 @@ export function setUnlocked(value: boolean): void {
 }
 
 export async function updateConfig(key: keyof AppConfig, value: unknown): Promise<void> {
-  (state.config as unknown as Record<string, unknown>)[key] = value;
   await setConfigItem(key, value);
+  (state.config as unknown as Record<string, unknown>)[key] = value;
 }
 
 /** 重新从 DB 刷新日记列表 */

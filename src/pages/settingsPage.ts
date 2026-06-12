@@ -31,6 +31,10 @@ export async function renderSettingsPage(mainEl: HTMLElement): Promise<void> {
                 <span class="theme-color-preview" style="background:#f7f3eb;border-color:#9c7c4a"></span>
                 雅致暖米
               </button>
+              <button class="theme-picker-btn ${config.theme === 'plain' ? 'active' : ''}" data-theme="plain" title="朴素白">
+                <span class="theme-color-preview" style="background:#ffffff;border-color:#737373"></span>
+                朴素白
+              </button>
               <button class="theme-picker-btn ${config.theme === 'green' ? 'active' : ''}" data-theme="green" title="清幽森绿">
                 <span class="theme-color-preview" style="background:#edf3ec;border-color:#5a7860"></span>
                 清幽森绿
@@ -139,27 +143,35 @@ function bindSettingsEvents(container: HTMLElement): void {
   container.querySelectorAll('.theme-picker-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       const theme = (btn as HTMLElement).dataset.theme as any;
-      await updateConfig('theme', theme);
-      
-      document.documentElement.dataset.theme = theme;
-      const isDark = theme === 'dark';
-      document.documentElement.classList.toggle('dark', isDark);
-      localStorage.setItem('diary-theme', theme);
-      
-      container.querySelectorAll('.theme-picker-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      
-      const icon = document.getElementById('theme-icon');
-      if (icon) icon.textContent = isDark ? '☀️' : '🌙';
-      
-      const themeNames: Record<string, string> = {
-        light: '雅致暖米',
-        green: '清幽森绿',
-        blue: '静谧天蓝',
-        pink: '温柔樱粉',
-        dark: '沉静暗夜'
-      };
-      showToast(`已切换为「${themeNames[theme] || theme}」主题`, { type: 'success' });
+      try {
+        await updateConfig('theme', theme);
+        
+        document.documentElement.dataset.theme = theme;
+        const isDark = theme === 'dark';
+        document.documentElement.classList.toggle('dark', isDark);
+        localStorage.setItem('diary-theme', theme);
+        if (!isDark) {
+          localStorage.setItem('diary-last-light-theme', theme);
+        }
+        
+        container.querySelectorAll('.theme-picker-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        const icon = document.getElementById('theme-icon');
+        if (icon) icon.textContent = isDark ? '☀️' : '🌙';
+        
+        const themeNames: Record<string, string> = {
+          light: '雅致暖米',
+          plain: '朴素白',
+          green: '清幽森绿',
+          blue: '静谧天蓝',
+          pink: '温柔樱粉',
+          dark: '沉静暗夜'
+        };
+        showToast(`已切换为「${themeNames[theme] || theme}」主题`, { type: 'success' });
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : '主题切换失败', { type: 'error' });
+      }
     });
   });
 

@@ -1,6 +1,7 @@
 import { navigate } from '../router/router';
 import type { PageName } from '../types';
 import { getAppConfig, updateConfig } from '../store/appStore';
+import { showToast } from './toast';
 
 // 导航项配置
 const NAV_ITEMS: { page: PageName; icon: string; label: string }[] = [
@@ -106,30 +107,34 @@ export function renderTopbar(container: HTMLElement): void {
 
 /** 切换主题 */
 async function toggleTheme(): Promise<void> {
-  const currentTheme = localStorage.getItem('diary-theme') || 'light';
+  const currentTheme = document.documentElement.dataset.theme || getAppConfig().theme || 'light';
   // 若当前是 dark 模式，切回上一次使用的浅色配色；若不是，则切为 dark
   const nextTheme = currentTheme === 'dark'
     ? (localStorage.getItem('diary-last-light-theme') || 'light') as any
     : 'dark';
 
-  if (currentTheme !== 'dark') {
-    localStorage.setItem('diary-last-light-theme', currentTheme);
-  }
+  try {
+    await updateConfig('theme', nextTheme);
 
-  localStorage.setItem('diary-theme', nextTheme);
-  document.documentElement.dataset.theme = nextTheme;
-  const isDark = nextTheme === 'dark';
-  document.documentElement.classList.toggle('dark', isDark);
+    if (currentTheme !== 'dark') {
+      localStorage.setItem('diary-last-light-theme', currentTheme);
+    }
 
-  const icon = document.getElementById('theme-icon');
-  if (icon) icon.textContent = isDark ? '☀️' : '🌙';
+    localStorage.setItem('diary-theme', nextTheme);
+    document.documentElement.dataset.theme = nextTheme;
+    const isDark = nextTheme === 'dark';
+    document.documentElement.classList.toggle('dark', isDark);
 
-  await updateConfig('theme', nextTheme);
+    const icon = document.getElementById('theme-icon');
+    if (icon) icon.textContent = isDark ? '☀️' : '🌙';
 
-  // 如果当前就在设置页面，同步刷新按钮的 active 状态
-  const activeBtn = document.querySelector(`.theme-picker-btn[data-theme="${nextTheme}"]`);
-  if (activeBtn) {
-    document.querySelectorAll('.theme-picker-btn').forEach(b => b.classList.remove('active'));
-    activeBtn.classList.add('active');
+    // 如果当前就在设置页面，同步刷新按钮的 active 状态
+    const activeBtn = document.querySelector(`.theme-picker-btn[data-theme="${nextTheme}"]`);
+    if (activeBtn) {
+      document.querySelectorAll('.theme-picker-btn').forEach(b => b.classList.remove('active'));
+      activeBtn.classList.add('active');
+    }
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '主题切换失败', { type: 'error' });
   }
 }

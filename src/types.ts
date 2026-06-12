@@ -49,7 +49,7 @@ export interface DiaryEntry {
 
 // 应用配置
 export interface AppConfig {
-  theme: 'light' | 'dark' | 'green' | 'blue' | 'pink';
+  theme: 'light' | 'dark' | 'green' | 'blue' | 'pink' | 'plain';
   fontSize: 'sm' | 'md' | 'lg' | 'xl';
   hasPassword: boolean;
   passwordHash: string;

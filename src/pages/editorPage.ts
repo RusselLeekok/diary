@@ -343,12 +343,21 @@ function bindEditorEvents(
     setTimeout(() => el.classList.remove('visible'), 2000);
   }
 
+  function getSaveErrorMessage(error: unknown): string {
+    if (error instanceof Error && error.message) return error.message;
+    return '保存失败，请稍后再试';
+  }
+
   // 仅在输入文字时更新字数，不再触发防抖保存
   quill.on('text-change', () => { updateWordCount(); });
 
   // 开启每 15 秒一次的后台悄悄保存（无提示，页面切走后自动停止）
   autoSaveTimer = setInterval(async () => {
-    await doSave(false);
+    try {
+      await doSave(false);
+    } catch (error) {
+      console.warn('自动保存失败', error);
+    }
   }, 15000);
 
   // 返回按钮行为：返回阅读页（若以前有日记）或列表页
@@ -362,17 +371,21 @@ function bindEditorEvents(
   });
 
   container.querySelector('#save-btn')!.addEventListener('click', async () => {
-    const entry = await doSave(false); // 保存日记但不要显示小气泡提示，因为马上要全局提示和跳转了
-    if (!entry) {
-      showToast('请先输入标题、正文或插入图片', { type: 'warning' });
-      return;
-    }
-    clearAutoSave();
-    showToast('日记已保存 ✓', { type: 'success' });
-    if (savedEntry && savedEntry.id) {
-      navigate('view', { id: savedEntry.id });
-    } else {
-      navigate('list');
+    try {
+      const entry = await doSave(false); // 保存日记但不要显示小气泡提示，因为马上要全局提示和跳转了
+      if (!entry) {
+        showToast('请先输入标题、正文或插入图片', { type: 'warning' });
+        return;
+      }
+      clearAutoSave();
+      showToast('日记已保存 ✓', { type: 'success' });
+      if (savedEntry && savedEntry.id) {
+        navigate('view', { id: savedEntry.id });
+      } else {
+        navigate('list');
+      }
+    } catch (error) {
+      showToast(getSaveErrorMessage(error), { type: 'error' });
     }
   });
 

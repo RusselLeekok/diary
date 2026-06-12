@@ -3,8 +3,10 @@ import { z } from 'zod';
 import { getUserId } from '../repositories.js';
 import { nowIso } from '../shared/date.js';
 
+const themeValues = ['light', 'dark', 'green', 'blue', 'pink', 'plain'] as const;
+
 const settingsSchema = z.object({
-  theme: z.enum(['light', 'dark']).optional(),
+  theme: z.enum(themeValues).optional(),
   fontSize: z.enum(['sm', 'md', 'lg', 'xl']).optional(),
   autoSaveInterval: z.number().int().min(5).max(3600).optional(),
 });
