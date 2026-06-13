@@ -161,6 +161,7 @@ function buildPage(mainEl: HTMLElement): void {
 // ====================================================
 function buildSearchPanelHTML(): string {
   const moodOptions = (Object.entries(MOOD_CONFIG) as [MoodType, typeof MOOD_CONFIG[MoodType]][])
+    .filter(([key]) => key !== 'none')
     .map(([key, cfg]) => {
       const isActive = searchMood === key;
       return `
@@ -447,7 +448,9 @@ function getFilteredEntries(): DiaryEntry[] {
     const kw = searchKeyword.toLowerCase();
     result = result.filter(e =>
       e.title.toLowerCase().includes(kw) ||
-      e.plainText.toLowerCase().includes(kw)
+      e.plainText.toLowerCase().includes(kw) ||
+      (e.weather && e.weather.toLowerCase().includes(kw)) ||
+      (e.location && e.location.toLowerCase().includes(kw))
     );
   }
 

@@ -1,7 +1,7 @@
 import { getEntryById, trashEntry } from '../services/databaseService';
 import { refreshEntries, getAllTagsList } from '../store/appStore';
 import { navigate } from '../router/router';
-import { MOOD_CONFIG } from '../types';
+import { MOOD_CONFIG, WEATHER_CONFIG } from '../types';
 import { formatDisplayDate, formatRelativeTime } from '../utils/dateUtils';
 import { getCategoryColor, UNCATEGORIZED_COLOR } from '../utils/categoryUtils';
 import { showModal } from '../components/modal';
@@ -48,6 +48,7 @@ export async function renderViewPage(mainEl: HTMLElement, params?: Record<string
   if (!entry) { renderError(); return; }
 
   const mood = MOOD_CONFIG[entry.mood] ?? MOOD_CONFIG.none;
+  const weather = entry.weather && entry.weather in WEATHER_CONFIG ? WEATHER_CONFIG[entry.weather] : null;
   const currentCategory = entry.tags[0] ?? '';
   const allTags = getAllTagsList();
   const catColor = currentCategory ? getCategoryColor(allTags, currentCategory) : UNCATEGORIZED_COLOR;
@@ -109,10 +110,27 @@ export async function renderViewPage(mainEl: HTMLElement, params?: Record<string
                 </div>
               </div>
               <div class="view-status-row">
-                <div class="view-mood-tag" style="background:${mood.color}15;color:${mood.color}">
-                  <span>${mood.emoji}</span>
-                  <span>${mood.label}</span>
-                </div>
+                ${entry.mood && entry.mood !== 'none' ? `
+                  <div class="view-mood-tag" style="background:${mood.color}15;color:${mood.color}">
+                    <span>${mood.emoji}</span>
+                    <span>${mood.label}</span>
+                  </div>
+                ` : ''}
+                ${weather && entry.weather !== 'none' ? `
+                  <div class="view-weather-tag" style="background:${weather.color}15;color:${weather.color}">
+                    <span>${weather.emoji}</span>
+                    <span>${weather.label}</span>
+                  </div>
+                ` : ''}
+                ${entry.location ? `
+                  <div class="view-location-tag">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+                      <circle cx="12" cy="9" r="2.5"/>
+                    </svg>
+                    <span>${escapeHtml(entry.location)}</span>
+                  </div>
+                ` : ''}
                 <div class="view-cat-tag">
                   <span class="view-cat-dot" style="background:${catColor}"></span>
                   <span>${safeCategory}</span>
@@ -123,9 +141,7 @@ export async function renderViewPage(mainEl: HTMLElement, params?: Record<string
             <div class="view-divider"></div>
 
             <!-- 正文（继承 Quill 富文本排版样式） -->
-            <div class="view-content ql-editor">
-              ${safeContent}
-            </div>
+            <div class="view-content ql-editor">${safeContent}</div>
           </article>
 
         </div>

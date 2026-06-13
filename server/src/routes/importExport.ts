@@ -29,6 +29,8 @@ const importEntrySchema = z.object({
   updatedAt: z.string().optional(),
   dateFor: z.string().optional(),
   timeFor: z.string().optional(),
+  weather: z.string().nullable().optional(),
+  location: z.string().nullable().optional(),
 }).passthrough();
 
 const importSchema = z.object({

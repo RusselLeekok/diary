@@ -30,6 +30,38 @@ export const MOOD_CONFIG: Record<MoodType, MoodConfig> = {
   none:     { emoji: '📝', label: '未选择', color: '#cbd5e1' },
 };
 
+// 天气类型
+export type WeatherType =
+  | 'sunny'      // ☀️ 晴天
+  | 'cloudy'     // ☁️ 多云
+  | 'overcast'   // ⛅ 阴天
+  | 'rainy'      // 🌧️ 雨天
+  | 'snowy'      // ❄️ 雪天
+  | 'windy'      // 💨 风天
+  | 'thunder'    // ⛈️ 雷雨
+  | 'foggy'      // 🌫️ 有雾
+  | 'none';      // 未选择
+
+// 天气配置
+export interface WeatherConfig {
+  emoji: string;
+  label: string;
+  color: string;
+}
+
+// 所有天气的配置映射
+export const WEATHER_CONFIG: Record<WeatherType, WeatherConfig> = {
+  sunny:    { emoji: '☀️', label: '晴天', color: '#f59e0b' },
+  cloudy:   { emoji: '☁️', label: '多云', color: '#64748b' },
+  overcast: { emoji: '⛅', label: '阴天', color: '#94a3b8' },
+  rainy:    { emoji: '🌧️', label: '雨天', color: '#3b82f6' },
+  snowy:    { emoji: '❄️', label: '雪天', color: '#38bdf8' },
+  windy:    { emoji: '💨', label: '风天', color: '#14b8a6' },
+  thunder:  { emoji: '⛈️', label: '雷雨', color: '#6366f1' },
+  foggy:    { emoji: '🌫️', label: '有雾', color: '#cbd5e1' },
+  none:     { emoji: '🌈', label: '天气', color: '#cbd5e1' },
+};
+
 // 日记实体
 export interface DiaryEntry {
   id: string;
@@ -45,6 +77,8 @@ export interface DiaryEntry {
   dateFor: string;        // YYYY-MM-DD
   timeFor?: string;       // HH:MM
   isDeleted?: boolean;    // 是否已被删除到垃圾箱
+  weather?: WeatherType;
+  location?: string;
 }
 
 // 应用配置

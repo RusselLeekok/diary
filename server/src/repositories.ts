@@ -21,6 +21,8 @@ export interface EntryPayload {
   isDeleted?: boolean;
   createdAt?: string;
   updatedAt?: string;
+  weather?: string | null;
+  location?: string | null;
 }
 
 export interface EntryRow {
@@ -40,6 +42,8 @@ export interface EntryRow {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  weather: string | null;
+  location: string | null;
 }
 
 export function getUserId(): string {
@@ -66,6 +70,8 @@ export function rowToEntry(row: EntryRow) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at ?? undefined,
+    weather: row.weather ?? undefined,
+    location: row.location ?? undefined,
   };
 }
 
@@ -91,6 +97,8 @@ export function normalizeEntryPayload(db: Database, payload: EntryPayload, exist
   const dateFor = payload.dateFor ?? toLocalDateString(new Date());
   const timeFor = payload.timeFor || null;
   const categoryId = resolveCategoryId(db, payload, userId);
+  const weather = payload.weather || null;
+  const location = payload.location || null;
   const now = nowIso();
 
   return {
@@ -109,6 +117,8 @@ export function normalizeEntryPayload(db: Database, payload: EntryPayload, exist
     createdAt: existing?.created_at ?? payload.createdAt ?? now,
     updatedAt: now,
     deletedAt: payload.isDeleted ? (payload.updatedAt ?? now) : null,
+    weather,
+    location,
   };
 }
 
@@ -136,9 +146,10 @@ export function upsertEntry(db: Database, payload: ReturnType<typeof normalizeEn
   db.prepare(`
     INSERT INTO entries (
       id, user_id, title, content_html, plain_text, mood, category_id, word_count,
-      is_locked, is_deleted, date_for, time_for, created_at, updated_at, deleted_at
+      is_locked, is_deleted, date_for, time_for, created_at, updated_at, deleted_at,
+      weather, location
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       title = excluded.title,
       content_html = excluded.content_html,
@@ -151,7 +162,9 @@ export function upsertEntry(db: Database, payload: ReturnType<typeof normalizeEn
       date_for = excluded.date_for,
       time_for = excluded.time_for,
       updated_at = excluded.updated_at,
-      deleted_at = excluded.deleted_at
+      deleted_at = excluded.deleted_at,
+      weather = excluded.weather,
+      location = excluded.location
   `).run(
     payload.id,
     payload.userId,
@@ -168,5 +181,7 @@ export function upsertEntry(db: Database, payload: ReturnType<typeof normalizeEn
     payload.createdAt,
     payload.updatedAt,
     payload.deletedAt,
+    payload.weather,
+    payload.location,
   );
 }

@@ -61,6 +61,8 @@ function migrate(db: Database): void {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       deleted_at TEXT,
+      weather TEXT,
+      location TEXT,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
     );
@@ -69,6 +71,17 @@ function migrate(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_entries_user_mood ON entries(user_id, is_deleted, mood);
     CREATE INDEX IF NOT EXISTS idx_entries_user_category ON entries(user_id, is_deleted, category_id);
   `);
+
+  try {
+    db.exec('ALTER TABLE entries ADD COLUMN weather TEXT;');
+  } catch (e) {
+    // column already exists
+  }
+  try {
+    db.exec('ALTER TABLE entries ADD COLUMN location TEXT;');
+  } catch (e) {
+    // column already exists
+  }
 }
 
 function seedDefaultUser(db: Database): void {

@@ -29,7 +29,7 @@ function buildStatsHTML(stats: Awaited<ReturnType<typeof getStats>>): string {
   let topMood: MoodType = 'none';
   let topMoodCount = 0;
   (Object.entries(moodCount)).forEach(([mood, count]) => {
-    if (!(mood in MOOD_CONFIG)) return;
+    if (!(mood in MOOD_CONFIG) || mood === 'none') return;
     if (count > topMoodCount) { topMoodCount = count as number; topMood = mood as MoodType; }
   });
 
@@ -138,7 +138,7 @@ function renderCharts(stats: Awaited<ReturnType<typeof getStats>>): void {
   // 情绪饼图
   const pieCtx = (document.getElementById('chart-mood-pie') as HTMLCanvasElement)?.getContext('2d');
   const moodEntries = Object.entries(moodCount)
-    .filter(([k, v]) => k in MOOD_CONFIG && (v as number) > 0) as [MoodType, number][];
+    .filter(([k, v]) => k in MOOD_CONFIG && k !== 'none' && (v as number) > 0) as [MoodType, number][];
   if (pieCtx && moodEntries.length > 0) {
     const chart = new Chart(pieCtx, {
       type: 'doughnut',

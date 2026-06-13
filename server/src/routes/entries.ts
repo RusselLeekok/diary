@@ -23,6 +23,8 @@ const entryBodySchema = z.object({
   dateFor: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   timeFor: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
   isLocked: z.boolean().optional(),
+  weather: z.string().nullable().optional(),
+  location: z.string().nullable().optional(),
 });
 
 const listQuerySchema = z.object({
@@ -51,8 +53,8 @@ export async function registerEntryRoutes(app: FastifyInstance): Promise<void> {
     }
     if (query.keyword?.trim()) {
       const keyword = `%${query.keyword.trim().toLowerCase()}%`;
-      where.push('(LOWER(e.title) LIKE ? OR LOWER(e.plain_text) LIKE ? OR LOWER(COALESCE(c.name, "")) LIKE ?)');
-      params.push(keyword, keyword, keyword);
+      where.push('(LOWER(e.title) LIKE ? OR LOWER(e.plain_text) LIKE ? OR LOWER(COALESCE(c.name, "")) LIKE ? OR LOWER(COALESCE(e.weather, "")) LIKE ? OR LOWER(COALESCE(e.location, "")) LIKE ?)');
+      params.push(keyword, keyword, keyword, keyword, keyword);
     }
     if (query.mood) {
       where.push('e.mood = ?');

@@ -1,6 +1,6 @@
 import Quill from 'quill';
-import type { DiaryEntry, MoodType } from '../types';
-import { MOOD_CONFIG } from '../types';
+import type { DiaryEntry, MoodType, WeatherType } from '../types';
+import { MOOD_CONFIG, WEATHER_CONFIG } from '../types';
 import { getEntryById, saveEntry } from '../services/databaseService';
 import { refreshEntries, getAllTagsList, getEntries, addCategory } from '../store/appStore';
 import { navigate } from '../router/router';
@@ -48,6 +48,8 @@ export async function renderEditorPage(mainEl: HTMLElement, params?: Record<stri
   const dateValue = loadedEntry?.dateFor || params?.date || today();
   const titleValue = loadedEntry?.title || '';
   const moodValue: MoodType = loadedEntry?.mood && loadedEntry.mood in MOOD_CONFIG ? loadedEntry.mood : 'none';
+  const weatherValue: WeatherType = loadedEntry?.weather && loadedEntry.weather in WEATHER_CONFIG ? loadedEntry.weather : 'none';
+  const locationValue = loadedEntry?.location ?? '';
   // 取第一个 tag 作为分类（单选分类系统）
   const currentCategory = loadedEntry?.tags[0] ?? '';
 
@@ -78,12 +80,42 @@ export async function renderEditorPage(mainEl: HTMLElement, params?: Record<stri
               <span class="mood-label-text">${MOOD_CONFIG[moodValue].label}</span>
             </button>
             <div class="mood-dropdown" id="mood-dropdown" hidden>
-              ${(Object.entries(MOOD_CONFIG) as [MoodType, typeof MOOD_CONFIG[MoodType]][]).map(([key, cfg]) => `
+              ${(Object.entries(MOOD_CONFIG) as [MoodType, typeof MOOD_CONFIG[MoodType]][]).filter(([key]) => key !== 'none').map(([key, cfg]) => `
                 <button class="mood-option ${key === moodValue ? 'active' : ''}" data-mood="${key}" type="button">
+                   <span>${cfg.emoji}</span> ${cfg.label}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+          <!-- 天气选择 -->
+          <div class="weather-selector" id="weather-selector">
+            <button class="weather-current" id="weather-current" type="button" title="选择天气">
+              <span class="weather-current-emoji">${WEATHER_CONFIG[weatherValue].emoji}</span>
+              <span class="weather-label-text">${WEATHER_CONFIG[weatherValue].label}</span>
+            </button>
+            <div class="weather-dropdown" id="weather-dropdown" hidden>
+              ${(Object.entries(WEATHER_CONFIG) as [WeatherType, typeof WEATHER_CONFIG[WeatherType]][]).filter(([key]) => key !== 'none').map(([key, cfg]) => `
+                <button class="weather-option ${key === weatherValue ? 'active' : ''}" data-weather="${key}" type="button">
                   <span>${cfg.emoji}</span> ${cfg.label}
                 </button>
               `).join('')}
             </div>
+          </div>
+          <!-- 位置输入 -->
+          <div class="location-wrapper">
+            <svg class="location-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+              <circle cx="12" cy="9" r="2.5"/>
+            </svg>
+            <input
+              type="text"
+              id="entry-location"
+              class="entry-location-input"
+              placeholder="位置"
+              value="${escapeHtml(locationValue)}"
+              maxlength="100"
+              autocomplete="off"
+            />
           </div>
           <!-- 分类选择器（单选下拉） -->
           <div class="cat-picker" id="cat-picker">
@@ -290,6 +322,7 @@ function bindEditorEvents(
 
   let savedEntry: DiaryEntry | null = loadedEntry;
   let selectedMood: MoodType = loadedEntry?.mood && loadedEntry.mood in MOOD_CONFIG ? loadedEntry.mood : 'none';
+  let selectedWeather: WeatherType = loadedEntry?.weather && loadedEntry.weather in WEATHER_CONFIG ? loadedEntry.weather : 'none';
   // 单选分类（存入 tags[0]）
   let selectedCategory: string = initCategory;
   let lastEditorSelection: TextRange | null = null;
@@ -341,6 +374,8 @@ function bindEditorEvents(
     if (!titleEl) return null;
 
     const title    = titleEl.value.trim();
+    const locationEl = container.querySelector('#entry-location') as HTMLInputElement | null;
+    const selectedLocation = locationEl ? locationEl.value.trim() : '';
     const dateFor  = dtPicker.getDate() || today();
     const timeFor  = dtPicker.getTime();
     const content  = sanitizeDiaryContent(quill.root.innerHTML);
@@ -361,6 +396,8 @@ function bindEditorEvents(
       updatedAt: new Date().toISOString(),
       dateFor,
       timeFor,
+      weather: selectedWeather,
+      location: selectedLocation,
     };
     await saveEntry(entry);
     await refreshEntries();
@@ -700,18 +737,57 @@ function bindEditorEvents(
   });
 
   // --------- 情绪选择器 ---------
+  const weatherCurrent = container.querySelector('#weather-current')!;
+  const weatherDropdown = container.querySelector('#weather-dropdown') as HTMLElement;
+
+  // --------- 天气选择器 ---------
+  weatherCurrent.addEventListener('click', (e) => {
+    e.stopPropagation();
+    weatherDropdown.hidden = !weatherDropdown.hidden;
+    moodDropdown.hidden = true;
+    catPickerDropdown.hidden = true;
+  });
+  container.querySelectorAll('.weather-option').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const clickedWeather = (btn as HTMLElement).dataset.weather as WeatherType;
+      if (selectedWeather === clickedWeather) {
+        selectedWeather = 'none';
+        const cfg = WEATHER_CONFIG.none;
+        weatherCurrent.innerHTML = `<span class="weather-current-emoji">${cfg.emoji}</span><span class="weather-label-text">${cfg.label}</span>`;
+        btn.classList.remove('active');
+      } else {
+        selectedWeather = clickedWeather;
+        const cfg = WEATHER_CONFIG[selectedWeather];
+        weatherCurrent.innerHTML = `<span class="weather-current-emoji">${cfg.emoji}</span><span class="weather-label-text">${cfg.label}</span>`;
+        container.querySelectorAll('.weather-option').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      }
+      weatherDropdown.hidden = true;
+    });
+  });
+
+  // --------- 情绪选择器 ---------
   moodCurrent.addEventListener('click', (e) => {
     e.stopPropagation();
     moodDropdown.hidden = !moodDropdown.hidden;
     catPickerDropdown.hidden = true;
+    weatherDropdown.hidden = true;
   });
   container.querySelectorAll('.mood-option').forEach(btn => {
     btn.addEventListener('click', () => {
-      selectedMood = (btn as HTMLElement).dataset.mood as MoodType;
-      const cfg = MOOD_CONFIG[selectedMood];
-      moodCurrent.innerHTML = `<span>${cfg.emoji}</span><span class="mood-label-text">${cfg.label}</span>`;
-      container.querySelectorAll('.mood-option').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
+      const clickedMood = (btn as HTMLElement).dataset.mood as MoodType;
+      if (selectedMood === clickedMood) {
+        selectedMood = 'none';
+        const cfg = MOOD_CONFIG.none;
+        moodCurrent.innerHTML = `<span>${cfg.emoji}</span><span class="mood-label-text">${cfg.label}</span>`;
+        btn.classList.remove('active');
+      } else {
+        selectedMood = clickedMood;
+        const cfg = MOOD_CONFIG[selectedMood];
+        moodCurrent.innerHTML = `<span>${cfg.emoji}</span><span class="mood-label-text">${cfg.label}</span>`;
+        container.querySelectorAll('.mood-option').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      }
       moodDropdown.hidden = true;
       // 情绪变更不触发 3 秒自动保存，由 15 秒定时器抓取
     });
@@ -722,6 +798,7 @@ function bindEditorEvents(
     e.stopPropagation();
     catPickerDropdown.hidden = !catPickerDropdown.hidden;
     moodDropdown.hidden = true;
+    weatherDropdown.hidden = true;
   });
 
   /** 更新触发器显示 */
@@ -834,6 +911,9 @@ function bindEditorEvents(
   editorDocumentClickHandler = (e: MouseEvent) => {
     if (!container.querySelector('#mood-selector')?.contains(e.target as Node)) {
       moodDropdown.hidden = true;
+    }
+    if (!container.querySelector('#weather-selector')?.contains(e.target as Node)) {
+      weatherDropdown.hidden = true;
     }
     if (!container.querySelector('#cat-picker')?.contains(e.target as Node)) {
       catPickerDropdown.hidden = true;

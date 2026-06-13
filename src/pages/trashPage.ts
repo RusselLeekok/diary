@@ -80,10 +80,12 @@ function renderTrashCard(entry: DiaryEntry): string {
     <article class="trash-card" data-id="${entry.id}">
       <div class="trash-card-body">
         <div class="trash-card-meta">
-          <div class="trash-card-mood" style="background:${mood.color}15;color:${mood.color}">
-            <span>${mood.emoji}</span>
-            <span>${mood.label}</span>
-          </div>
+          ${entry.mood && entry.mood !== 'none' ? `
+            <div class="trash-card-mood" style="background:${mood.color}15;color:${mood.color}">
+              <span>${mood.emoji}</span>
+              <span>${mood.label}</span>
+            </div>
+          ` : ''}
           <span class="trash-card-date">${dateStr}${timeStr}</span>
         </div>
         <h3 class="trash-card-title">${entry.title || '无标题'}</h3>

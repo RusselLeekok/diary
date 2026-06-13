@@ -1,5 +1,5 @@
 import type { DiaryEntry } from '../types';
-import { MOOD_CONFIG } from '../types';
+import { MOOD_CONFIG, WEATHER_CONFIG } from '../types';
 import { formatDisplayDate, formatRelativeTime } from '../utils/dateUtils';
 import { navigate } from '../router/router';
 import { trashEntry } from '../services/databaseService';
@@ -17,6 +17,30 @@ function extractFirstImageUrl(html: string): string | null {
 /** 渲染单张日记卡片 HTML */
 export function renderDiaryCard(entry: DiaryEntry): string {
   const mood = MOOD_CONFIG[entry.mood] ?? MOOD_CONFIG.none;
+  const weather = entry.weather && entry.weather in WEATHER_CONFIG ? WEATHER_CONFIG[entry.weather] : null;
+
+  const weatherBadge = weather && entry.weather !== 'none' ? `
+    <span class="card-weather-badge-inline" data-tooltip="${weather.label}" style="background:${weather.color}20;color:${weather.color}">
+      ${weather.emoji}
+    </span>
+  ` : '';
+
+  const moodBadge = entry.mood && entry.mood !== 'none' ? `
+    <span class="card-mood-badge-inline" data-tooltip="${mood.label}" style="background:${mood.color}20;color:${mood.color}">
+      ${mood.emoji}
+    </span>
+  ` : '';
+
+  const locationBadge = entry.location ? `
+    <span class="card-location-badge-inline" title="${escapeHtml(entry.location)}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="10" height="10">
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+        <circle cx="12" cy="9" r="2.5"/>
+      </svg>
+      <span>${escapeHtml(entry.location)}</span>
+    </span>
+  ` : '';
+
   const allTags = getAllTagsList();
   const tags = entry.tags.slice(0, 3).map(t => {
     const color = getCategoryColor(allTags, t);
@@ -40,11 +64,13 @@ export function renderDiaryCard(entry: DiaryEntry): string {
         <div class="card-body-left">
           <div class="card-header">
             <div class="card-date">
-              <span class="card-date-text">${safeDisplayDateText}</span>
+              <div class="card-header-top-row">
+                <span class="card-date-text">${safeDisplayDateText}</span>
+                ${locationBadge}
+                ${weatherBadge}
+                ${moodBadge}
+              </div>
               <span class="card-time">${formatRelativeTime(entry.updatedAt)}</span>
-            </div>
-            <div class="card-mood" title="${mood.label}" style="background:${mood.color}20;color:${mood.color}">
-              ${mood.emoji}
             </div>
           </div>
           ${entry.title ? `<h3 class="card-title">${escapeHtml(entry.title)}</h3>` : ''}
@@ -73,11 +99,13 @@ export function renderDiaryCard(entry: DiaryEntry): string {
         aria-label="${safeTitle} - ${safeDisplayDateText}">
         <div class="card-header">
           <div class="card-date">
-            <span class="card-date-text">${safeDisplayDateText}</span>
+            <div class="card-header-top-row">
+              <span class="card-date-text">${safeDisplayDateText}</span>
+              ${locationBadge}
+              ${weatherBadge}
+              ${moodBadge}
+            </div>
             <span class="card-time">${formatRelativeTime(entry.updatedAt)}</span>
-          </div>
-          <div class="card-mood" title="${mood.label}" style="background:${mood.color}20;color:${mood.color}">
-            ${mood.emoji}
           </div>
         </div>
         ${entry.title ? `<h3 class="card-title">${escapeHtml(entry.title)}</h3>` : ''}

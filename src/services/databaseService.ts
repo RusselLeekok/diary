@@ -1,5 +1,5 @@
-import type { AppConfig, DiaryEntry, MoodType } from '../types';
-import { DEFAULT_CONFIG, MOOD_CONFIG } from '../types';
+import type { AppConfig, DiaryEntry, MoodType, WeatherType } from '../types';
+import { DEFAULT_CONFIG, MOOD_CONFIG, WEATHER_CONFIG } from '../types';
 import { apiRequest, jsonBody, API_BASE_URL } from './apiClient';
 
 interface EntryResponse {
@@ -25,6 +25,8 @@ interface ServerEntry {
   updatedAt: string;
   dateFor: string;
   timeFor?: string;
+  weather?: string;
+  location?: string;
 }
 
 interface CategoriesResponse {
@@ -48,6 +50,7 @@ export interface StatsResponse {
 
 function toDiaryEntry(entry: ServerEntry): DiaryEntry {
   const mood = entry.mood in MOOD_CONFIG ? entry.mood as MoodType : 'none';
+  const weather = entry.weather && entry.weather in WEATHER_CONFIG ? entry.weather as WeatherType : 'none';
   return {
     id: entry.id,
     title: entry.title,
@@ -62,6 +65,8 @@ function toDiaryEntry(entry: ServerEntry): DiaryEntry {
     updatedAt: entry.updatedAt,
     dateFor: entry.dateFor,
     timeFor: entry.timeFor,
+    weather,
+    location: entry.location ?? '',
   };
 }
 
@@ -75,6 +80,8 @@ function entryPayload(entry: DiaryEntry) {
     dateFor: entry.dateFor,
     timeFor: entry.timeFor ?? null,
     isLocked: entry.isLocked,
+    weather: entry.weather ?? 'none',
+    location: entry.location ?? null,
   };
 }
 

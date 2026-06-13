@@ -1,6 +1,6 @@
 import Dexie, { type Table } from 'dexie';
-import type { DiaryEntry, AppConfig, MoodType } from '../types';
-import { DEFAULT_CONFIG, MOOD_CONFIG } from '../types';
+import type { DiaryEntry, AppConfig, MoodType, WeatherType } from '../types';
+import { DEFAULT_CONFIG, MOOD_CONFIG, WEATHER_CONFIG } from '../types';
 import { countWords, toDateString } from '../utils/dateUtils';
 import { sanitizeDiaryContent } from '../utils/htmlUtils';
 
@@ -222,6 +222,8 @@ function normalizeImportedEntry(raw: unknown, index: number): DiaryEntry {
   const content = sanitizeDiaryContent(typeof item.content === 'string' ? item.content : '');
   const plainText = typeof item.plainText === 'string' ? item.plainText : htmlToText(content);
   const mood = isMoodType(item.mood) ? item.mood : 'none';
+  const weather = isWeatherType(item.weather) ? item.weather : 'none';
+  const location = typeof item.location === 'string' ? item.location.trim().slice(0, 100) : '';
   const dateFor = isDateString(item.dateFor) ? item.dateFor : toDateString(new Date());
   const timeFor = typeof item.timeFor === 'string' && isTimeString(item.timeFor) ? item.timeFor : undefined;
   const title = typeof item.title === 'string' ? item.title.trim().slice(0, 100) : '';
@@ -244,11 +246,17 @@ function normalizeImportedEntry(raw: unknown, index: number): DiaryEntry {
     updatedAt: typeof item.updatedAt === 'string' && !Number.isNaN(Date.parse(item.updatedAt)) ? item.updatedAt : now,
     dateFor,
     timeFor,
+    weather,
+    location,
   };
 }
 
 function isMoodType(value: unknown): value is MoodType {
   return typeof value === 'string' && value in MOOD_CONFIG;
+}
+
+function isWeatherType(value: unknown): value is WeatherType {
+  return typeof value === 'string' && value in WEATHER_CONFIG;
 }
 
 function isDateString(value: unknown): value is string {

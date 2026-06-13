@@ -2196,8 +2196,8 @@ body {
 .view-header {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  margin-bottom: 4px;
+  gap: 12px;
+  margin-bottom: 0;
 }
 
 .view-title {
@@ -2229,7 +2229,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 4px;
+  margin-top: 0;
 }
 
 .view-mood-tag {
@@ -2264,7 +2264,7 @@ body {
 .view-divider {
   height: 1px;
   background: linear-gradient(to right, var(--border-light), transparent);
-  margin-bottom: 0px;
+  margin: 10px 0 12px;
 }
 
 .view-content {
@@ -2283,8 +2283,8 @@ body {
   margin-top: 0 !important;
 }
 
-.view-content > p:first-child:empty,
-.view-content > p:first-child:has(> br:only-child) {
+.view-content > p:empty,
+.view-content > p:has(> br:only-child) {
   display: none;
 }
 
@@ -3580,5 +3580,224 @@ body {
   height: 16px;
   border-radius: 50%;
   border: 2px solid;
+  flex-shrink: 0;
+}
+
+/* ==================== 天气与位置新增样式 ==================== */
+/* 天气选择器 */
+.weather-selector {
+  position: relative;
+}
+.weather-current {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: var(--bg-app);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  transition: all var(--duration) var(--ease);
+  font-family: var(--font-ui);
+}
+.weather-current:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.weather-current-emoji {
+  font-size: 0.95rem;
+}
+
+.weather-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  z-index: 300;
+  min-width: 220px;
+}
+.weather-dropdown[hidden] {
+  display: none;
+}
+.weather-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  transition: all var(--duration) var(--ease);
+  font-family: var(--font-ui);
+  white-space: nowrap;
+}
+.weather-option:hover, .weather-option.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+/* 位置输入 */
+.location-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: var(--bg-app);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  width: 100px;
+  transition: all var(--duration) var(--ease);
+}
+.location-wrapper:focus-within {
+  border-color: var(--accent);
+  width: 150px;
+}
+.location-icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.entry-location-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  width: 100%;
+  font-family: var(--font-ui);
+}
+.entry-location-input::placeholder {
+  color: var(--text-placeholder);
+}
+
+/* 日记卡片标记 */
+.card-header-top-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.card-weather-badge-inline,
+.card-mood-badge-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* 悬浮即时工具提示气泡 */
+.card-weather-badge-inline::after,
+.card-mood-badge-inline::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%) scale(0.85);
+  background: var(--text-primary);
+  color: var(--bg-card);
+  padding: 4px 8px;
+  font-size: 0.68rem;
+  font-family: var(--font-ui);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  z-index: 500;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-light);
+}
+
+.card-weather-badge-inline::before,
+.card-mood-badge-inline::before {
+  content: '';
+  position: absolute;
+  bottom: 110%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 4px;
+  border-style: solid;
+  border-color: var(--text-primary) transparent transparent transparent;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  z-index: 500;
+}
+
+.card-weather-badge-inline:hover::after,
+.card-mood-badge-inline:hover::after,
+.card-weather-badge-inline:hover::before,
+.card-mood-badge-inline:hover::before {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) scale(1);
+}
+.card-location-badge-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  background: var(--bg-app);
+  border: 1px solid var(--border-light);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  cursor: default;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.card-location-badge-inline svg {
+  color: var(--text-placeholder);
+  flex-shrink: 0;
+}
+
+/* 日记详情页标记 */
+.view-weather-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  font-weight: 500;
+  font-family: var(--font-ui);
+}
+.view-location-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+}
+.view-location-tag svg {
+  color: var(--text-placeholder);
   flex-shrink: 0;
 }

@@ -26,7 +26,12 @@ export async function exportAsMarkdown(entries: DiaryEntry[]): Promise<void> {
   for (const entry of entries) {
     lines.push(`# ${entry.title || '无标题'}`);
     lines.push('');
-    lines.push(`> 日期：${entry.dateFor}  情绪：${entry.mood}  标签：${entry.tags.join(', ') || '无'}`);
+    const metaParts = [`日期：${entry.dateFor}`];
+    if (entry.mood && entry.mood !== 'none') metaParts.push(`情绪：${entry.mood}`);
+    if (entry.weather && entry.weather !== 'none') metaParts.push(`天气：${entry.weather}`);
+    if (entry.location) metaParts.push(`位置：${entry.location}`);
+    metaParts.push(`标签：${entry.tags.join(', ') || '无'}`);
+    lines.push(`> ${metaParts.join('  ')}`);
     lines.push('');
     // 将 HTML 内容转为纯文本
     const tmp = document.createElement('div');
