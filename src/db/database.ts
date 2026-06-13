@@ -123,6 +123,7 @@ export async function getStats() {
 
   // 近30天每日字数
   const today = new Date();
+  const currentYear = today.getFullYear();
   const dailyWords: { date: string; count: number }[] = [];
   for (let i = 29; i >= 0; i--) {
     const d = new Date(today);
@@ -169,7 +170,152 @@ export async function getStats() {
     maxStreak = Math.max(maxStreak, tempStreak);
   }
 
-  return { total, totalWords, moodCount, dailyWords, streak, maxStreak };
+  const entryYears = entries
+    .map(entry => Number(entry.dateFor.slice(0, 4)))
+    .filter(year => Number.isInteger(year));
+  const minYear = Math.min(currentYear - 1, currentYear, ...entryYears);
+  const maxYear = Math.max(currentYear, ...entryYears);
+  const years: number[] = [];
+  for (let year = maxYear; year >= minYear; year--) {
+    years.push(year);
+  }
+
+  const yearStats = Object.fromEntries(years.map(year => {
+    const yearEntries = entries.filter(entry => entry.dateFor.startsWith(`${year}-`));
+    const timelineEntries = buildYearMonthTimeline(entries, year);
+    const summary = summarizeStatsEntries(yearEntries, timelineEntries);
+
+    return [String(year), {
+      year,
+      ...summary,
+      monthlyEntries: timelineEntries.map(entry => ({
+        month: Number(entry.key.slice(5, 7)),
+        count: entry.count,
+        words: entry.words,
+      })),
+    }];
+  }));
+
+  const todayString = toDateString(today);
+  const last30Start = toDateString(addDaysForStats(today, -29));
+  const last180Start = toDateString(addDaysForStats(today, -179));
+  const allStart = entries[0]?.dateFor ?? todayString;
+  const allEnd = entries[entries.length - 1]?.dateFor ?? todayString;
+
+  const periodStats = {
+    all: summarizeStatsEntries(entries, buildYearlyTimeline(entries, allStart, allEnd)),
+    last30: summarizeStatsEntries(
+      entries.filter(entry => entry.dateFor >= last30Start && entry.dateFor <= todayString),
+      buildDailyTimeline(entries, today, 30),
+    ),
+    last180: summarizeStatsEntries(
+      entries.filter(entry => entry.dateFor >= last180Start && entry.dateFor <= todayString),
+      buildMonthlyTimeline(entries, last180Start, todayString),
+    ),
+  };
+
+  return { total, totalWords, moodCount, dailyWords, streak, maxStreak, years, currentYear, yearStats, periodStats };
+}
+
+type StatsTimelineEntry = { key: string; label: string; count: number; words: number };
+
+function summarizeStatsEntries(entries: DiaryEntry[], timelineEntries: StatsTimelineEntry[]) {
+  const total = entries.length;
+  const totalWords = entries.reduce((sum, entry) => sum + entry.wordCount, 0);
+  const moodCount: Record<string, number> = {};
+  const weekdayEntries = Array.from({ length: 7 }, (_, weekday) => ({ weekday, count: 0, words: 0 }));
+  const activeDateSet = new Set<string>();
+
+  entries.forEach(entry => {
+    moodCount[entry.mood] = (moodCount[entry.mood] ?? 0) + 1;
+    activeDateSet.add(entry.dateFor);
+
+    const weekday = new Date(`${entry.dateFor}T00:00:00`).getDay();
+    weekdayEntries[weekday].count += 1;
+    weekdayEntries[weekday].words += entry.wordCount;
+  });
+
+  return {
+    total,
+    totalWords,
+    activeDays: activeDateSet.size,
+    avgWordsPerEntry: total > 0 ? Math.round(totalWords / total) : 0,
+    moodCount,
+    timelineEntries,
+    weekdayEntries,
+  };
+}
+
+function buildDailyTimeline(entries: DiaryEntry[], today: Date, days: number): StatsTimelineEntry[] {
+  return Array.from({ length: days }, (_, index) => {
+    const date = toDateString(addDaysForStats(today, index - days + 1));
+    const dayEntries = entries.filter(entry => entry.dateFor === date);
+    return {
+      key: date,
+      label: date.slice(5),
+      count: dayEntries.length,
+      words: dayEntries.reduce((sum, entry) => sum + entry.wordCount, 0),
+    };
+  });
+}
+
+function buildMonthlyTimeline(entries: DiaryEntry[], startDate: string, endDate: string): StatsTimelineEntry[] {
+  const start = new Date(`${startDate.slice(0, 7)}-01T00:00:00`);
+  const end = new Date(`${endDate.slice(0, 7)}-01T00:00:00`);
+  const result: StatsTimelineEntry[] = [];
+  const cursor = new Date(start);
+
+  while (cursor <= end) {
+    const year = cursor.getFullYear();
+    const month = cursor.getMonth() + 1;
+    const key = `${year}-${String(month).padStart(2, '0')}`;
+    const monthEntries = entries.filter(entry => entry.dateFor.startsWith(key));
+    result.push({
+      key,
+      label: `${year}年${month}月`,
+      count: monthEntries.length,
+      words: monthEntries.reduce((sum, entry) => sum + entry.wordCount, 0),
+    });
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  return result;
+}
+
+function buildYearlyTimeline(entries: DiaryEntry[], startDate: string, endDate: string): StatsTimelineEntry[] {
+  const startYear = Number(startDate.slice(0, 4));
+  const endYear = Number(endDate.slice(0, 4));
+
+  return Array.from({ length: endYear - startYear + 1 }, (_, index) => {
+    const year = startYear + index;
+    const yearEntries = entries.filter(entry => entry.dateFor.startsWith(`${year}-`));
+    return {
+      key: String(year),
+      label: `${year}年`,
+      count: yearEntries.length,
+      words: yearEntries.reduce((sum, entry) => sum + entry.wordCount, 0),
+    };
+  });
+}
+
+function buildYearMonthTimeline(entries: DiaryEntry[], year: number): StatsTimelineEntry[] {
+  return Array.from({ length: 12 }, (_, index) => {
+    const month = index + 1;
+    const key = `${year}-${String(month).padStart(2, '0')}`;
+    const monthEntries = entries.filter(entry => entry.dateFor.startsWith(key));
+    return {
+      key,
+      label: `${month}月`,
+      count: monthEntries.length,
+      words: monthEntries.reduce((sum, entry) => sum + entry.wordCount, 0),
+    };
+  });
+}
+
+function addDaysForStats(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
 }
 
 // ==================== 配置 ====================

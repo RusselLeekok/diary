@@ -1,6 +1,8 @@
 import { getEntryById, trashEntry } from '../services/databaseService';
-import { refreshEntries, getAllTagsList } from '../store/appStore';
+import { refreshEntries, getAllTagsList, getEntries } from '../store/appStore';
 import { navigate } from '../router/router';
+
+let viewPageKeyDownHandler: ((e: KeyboardEvent) => void) | null = null;
 import { MOOD_CONFIG, WEATHER_CONFIG } from '../types';
 import { formatDisplayDate, formatRelativeTime } from '../utils/dateUtils';
 import { getCategoryColor, UNCATEGORIZED_COLOR } from '../utils/categoryUtils';
@@ -42,10 +44,20 @@ export async function renderViewPage(mainEl: HTMLElement, params?: Record<string
     mainEl.querySelector('#view-back-list')?.addEventListener('click', () => navigate('list'));
   };
 
+  if (viewPageKeyDownHandler) {
+    document.removeEventListener('keydown', viewPageKeyDownHandler);
+    viewPageKeyDownHandler = null;
+  }
+
   if (!id) { renderError(); return; }
 
   const entry = await getEntryById(id);
   if (!entry) { renderError(); return; }
+
+  const allEntries = getEntries();
+  const currentIndex = allEntries.findIndex(e => e.id === id);
+  const prevEntry = currentIndex > 0 ? allEntries[currentIndex - 1] : null;
+  const nextEntry = currentIndex !== -1 && currentIndex < allEntries.length - 1 ? allEntries[currentIndex + 1] : null;
 
   const mood = MOOD_CONFIG[entry.mood] ?? MOOD_CONFIG.none;
   const weather = entry.weather && entry.weather in WEATHER_CONFIG ? WEATHER_CONFIG[entry.weather] : null;
@@ -89,7 +101,25 @@ export async function renderViewPage(mainEl: HTMLElement, params?: Record<string
 
       <!-- ★ 下方独立滚动区 -->
       <div class="view-scroll">
-        <div class="view-inner">
+        <div class="view-inner" style="position: relative;">
+
+          <!-- 上一篇 (Newer) 按钮 -->
+          ${prevEntry ? `
+            <button class="view-nav-btn view-nav-prev" id="view-prev" title="上一篇：${escapeHtml(prevEntry.title || '无标题')}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+            </button>
+          ` : ''}
+
+          <!-- 下一篇 (Older) 按钮 -->
+          ${nextEntry ? `
+            <button class="view-nav-btn view-nav-next" id="view-next" title="下一篇：${escapeHtml(nextEntry.title || '无标题')}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </button>
+          ` : ''}
 
           <!-- 日记主体卡片 -->
           <article class="view-card">
@@ -150,9 +180,22 @@ export async function renderViewPage(mainEl: HTMLElement, params?: Record<string
     </div>
   `;
 
-  mainEl.querySelector('#view-back')?.addEventListener('click', () => navigate('list'));
+  const cleanup = () => {
+    if (viewPageKeyDownHandler) {
+      document.removeEventListener('keydown', viewPageKeyDownHandler);
+      viewPageKeyDownHandler = null;
+    }
+  };
+
+  const onBack = () => {
+    cleanup();
+    navigate('list');
+  };
+
+  mainEl.querySelector('#view-back')?.addEventListener('click', onBack);
 
   mainEl.querySelector('#view-edit')?.addEventListener('click', () => {
+    cleanup();
     navigate('editor', { id });
   });
 
@@ -163,6 +206,7 @@ export async function renderViewPage(mainEl: HTMLElement, params?: Record<string
       confirmText: '移入垃圾箱',
       confirmClass: 'btn-danger',
       onConfirm: async () => {
+        cleanup();
         await trashEntry(id);
         await refreshEntries();
         showToast('日记已移入垃圾箱 ✓', { type: 'success' });
@@ -170,6 +214,35 @@ export async function renderViewPage(mainEl: HTMLElement, params?: Record<string
       },
     });
   });
+
+  if (prevEntry) {
+    mainEl.querySelector('#view-prev')?.addEventListener('click', () => {
+      cleanup();
+      navigate('view', { id: prevEntry.id });
+    });
+  }
+
+  if (nextEntry) {
+    mainEl.querySelector('#view-next')?.addEventListener('click', () => {
+      cleanup();
+      navigate('view', { id: nextEntry.id });
+    });
+  }
+
+  // Keyboard navigation
+  viewPageKeyDownHandler = (e: KeyboardEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+
+    if (e.key === 'ArrowLeft' && prevEntry) {
+      cleanup();
+      navigate('view', { id: prevEntry.id });
+    } else if (e.key === 'ArrowRight' && nextEntry) {
+      cleanup();
+      navigate('view', { id: nextEntry.id });
+    }
+  };
+  document.addEventListener('keydown', viewPageKeyDownHandler);
 
   // 绑定图片点击大图预览 (Lightbox)
   const images = mainEl.querySelectorAll('.view-content img');

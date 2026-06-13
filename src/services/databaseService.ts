@@ -39,6 +39,16 @@ interface SettingsResponse {
   autoSaveInterval: number;
 }
 
+export interface StatsPeriodResponse {
+  total: number;
+  totalWords: number;
+  activeDays: number;
+  avgWordsPerEntry: number;
+  moodCount: Record<string, number>;
+  timelineEntries: { key: string; label: string; count: number; words: number }[];
+  weekdayEntries: { weekday: number; count: number; words: number }[];
+}
+
 export interface StatsResponse {
   total: number;
   totalWords: number;
@@ -46,6 +56,17 @@ export interface StatsResponse {
   dailyWords: { date: string; count: number }[];
   streak: number;
   maxStreak: number;
+  years: number[];
+  currentYear: number;
+  periodStats: {
+    all: StatsPeriodResponse;
+    last30: StatsPeriodResponse;
+    last180: StatsPeriodResponse;
+  };
+  yearStats: Record<string, StatsPeriodResponse & {
+    year: number;
+    monthlyEntries: { month: number; count: number; words: number }[];
+  }>;
 }
 
 function toDiaryEntry(entry: ServerEntry): DiaryEntry {
