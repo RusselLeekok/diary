@@ -81,7 +81,7 @@ export function renderTopbar(container: HTMLElement): void {
       <!-- 中间导航 -->
       <nav class="topbar-nav" role="navigation" aria-label="主导航">
         ${NAV_ITEMS.map(item => `
-          <button class="nav-item ${item.page === activePage ? 'active' : ''}" data-page="${item.page}" title="${item.label}" aria-label="${item.label}">
+          <button class="nav-item ${item.page === activePage ? 'active' : ''}" data-page="${item.page}" aria-label="${item.label}">
             <span class="nav-icon">${item.icon}</span>
             <span class="nav-label">${item.label}</span>
           </button>
@@ -91,7 +91,7 @@ export function renderTopbar(container: HTMLElement): void {
       <!-- 右侧操作区 -->
       <div class="topbar-actions">
         ${userHtml}
-        <button class="theme-toggle-btn" id="theme-toggle" title="切换主题" aria-label="切换深色/浅色主题">
+        <button class="theme-toggle-btn" id="theme-toggle" aria-label="切换深色/浅色主题">
           <span id="theme-icon">${isDark ? '☀️' : '🌙'}</span>
         </button>
         <button class="btn-new-entry" id="btn-new-entry" aria-label="新建日记">
