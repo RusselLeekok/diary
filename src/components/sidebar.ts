@@ -76,6 +76,7 @@ export function renderTopbar(container: HTMLElement): void {
       <div class="topbar-brand">
         <span class="brand-icon">📔</span>
         <span class="brand-name">日记</span>
+        <button class="topbar-brand-hitbox" id="topbar-brand-hitbox" type="button" aria-label="打开应用介绍"></button>
       </div>
 
       <!-- 中间导航 -->
@@ -120,6 +121,11 @@ export function renderTopbar(container: HTMLElement): void {
   // 新建日记
   container.querySelector('#btn-new-entry')!.addEventListener('click', () => {
     navigate('editor');
+  });
+
+  // 左上角品牌区隐藏入口
+  container.querySelector('#topbar-brand-hitbox')?.addEventListener('click', () => {
+    navigate('intro');
   });
 
   // 主题切换

@@ -120,7 +120,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 };
 
 // 路由页面
-export type PageName = 'list' | 'editor' | 'calendar' | 'trash' | 'stats' | 'settings' | 'view' | 'login';
+export type PageName = 'list' | 'intro' | 'editor' | 'calendar' | 'trash' | 'stats' | 'settings' | 'view' | 'login';
 
 // 搜索过滤条件
 export interface SearchFilter {

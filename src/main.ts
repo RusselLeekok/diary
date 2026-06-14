@@ -10,6 +10,7 @@ import { renderStatsPage } from './pages/statsPage';
 import { renderSettingsPage } from './pages/settingsPage';
 import { renderViewPage } from './pages/viewPage';
 import { renderTrashPage } from './pages/trashPage';
+import { renderIntroPage } from './pages/introPage';
 import { escapeHtml } from './utils/htmlUtils';
 import { checkAuth } from './store/authStore';
 import { renderLoginPage } from './pages/loginPage';
@@ -65,6 +66,7 @@ function renderAppShell(): HTMLElement {
 
 function registerAppRoutes(mainEl: HTMLElement): void {
   registerRoute('list', (_p) => renderListPage(mainEl));
+  registerRoute('intro', (_p) => renderIntroPage(mainEl));
   registerRoute('editor', (p) => renderEditorPage(mainEl, p));
   registerRoute('calendar', (_p) => renderCalendarPage(mainEl));
   registerRoute('trash', (_p) => renderTrashPage(mainEl));

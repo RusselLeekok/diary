@@ -5,7 +5,7 @@ type RouteHandler = (params?: Record<string, string>) => void;
 
 // 路由表
 const routes: Map<PageName, RouteHandler> = new Map();
-const VALID_PAGES = new Set<PageName>(['list', 'editor', 'calendar', 'trash', 'stats', 'settings', 'view', 'login']);
+const VALID_PAGES = new Set<PageName>(['list', 'intro', 'editor', 'calendar', 'trash', 'stats', 'settings', 'view', 'login']);
 
 // 当前页面
 let currentPage: PageName = 'list';
@@ -17,8 +17,9 @@ export function registerRoute(page: PageName, handler: RouteHandler): void {
 
 function checkAuthGuard(page: PageName, params?: Record<string, string>): PageName {
   const hasToken = !!getToken();
+  const isPublicPage = page === 'login' || page === 'intro';
 
-  if (!hasToken && page !== 'login') {
+  if (!hasToken && !isPublicPage) {
     // 记住重定向目标
     const redirectParam = params ? `${page}?${new URLSearchParams(params).toString()}` : page;
     window.location.hash = `#/login?redirect=${encodeURIComponent(redirectParam)}`;
