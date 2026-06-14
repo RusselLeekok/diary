@@ -48,6 +48,7 @@ let searchTags: string[] = [];
 let isFilterExpanded = false;
 let isEntriesLoading = false;
 let isLoadingMoreEntries = false;
+let isHistoryTodayActive = false;
 
 const ENTRY_RENDER_BATCH_SIZE = 30;
 const LIST_VISIBLE_COUNT_KEY = 'list-visible-entry-count';
@@ -83,6 +84,7 @@ export async function renderListPage(mainEl: HTMLElement, params?: Record<string
     searchDateTo = '';
     searchTags = [];
     isFilterExpanded = false;
+    isHistoryTodayActive = false;
   }
 
   selectedDate = null;
@@ -257,7 +259,8 @@ function buildSearchPanelHTML(): string {
     searchMood ||
     searchDateFrom ||
     searchDateTo ||
-    searchTags.length > 0
+    searchTags.length > 0 ||
+    isHistoryTodayActive
   );
 
   return `
@@ -271,6 +274,15 @@ function buildSearchPanelHTML(): string {
           <input type="text" id="search-keyword" class="search-keyword-input" placeholder="搜索日记标题或正文内容…" value="${escapeHtml(searchKeyword)}" />
           ${searchKeyword ? `<button class="search-clear-btn" id="search-clear-keyword" title="清空搜索词" type="button">✕</button>` : ''}
         </div>
+        <button class="btn btn-ghost history-today-btn ${isHistoryTodayActive ? 'active' : ''}" id="history-today-btn" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          那年今日
+        </button>
         <button class="btn btn-ghost filter-toggle-btn ${isFilterExpanded ? 'active' : ''}" id="filter-toggle-btn" type="button">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
             <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
@@ -575,6 +587,20 @@ function getFilteredEntries(): DiaryEntrySummary[] {
     );
   }
 
+  // 8. 那年今日过滤
+  if (isHistoryTodayActive) {
+    const today = new Date();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const targetMd = `${mm}-${dd}`;
+    const todayYear = today.getFullYear();
+    result = result.filter(e => {
+      const entryMd = e.dateFor.slice(5); // MM-DD
+      const entryYear = parseInt(e.dateFor.slice(0, 4), 10);
+      return entryMd === targetMd && entryYear < todayYear;
+    });
+  }
+
   return result;
 }
 
@@ -596,6 +622,15 @@ function bindPageEvents(container: HTMLElement): void {
       }, 200);
     });
   }
+
+  // 绑定那年今日按钮切换
+  const historyTodayBtn = container.querySelector('#history-today-btn');
+  historyTodayBtn?.addEventListener('click', () => {
+    isHistoryTodayActive = !isHistoryTodayActive;
+    historyTodayBtn.classList.toggle('active', isHistoryTodayActive);
+    resetVisibleEntryCount();
+    updateFilteredResults(container);
+  });
 
   // 绑定高级筛选折叠切换
   const filterToggleBtn = container.querySelector('#filter-toggle-btn');
@@ -842,7 +877,8 @@ function updateFilteredResults(container: HTMLElement): void {
       searchMood ||
       searchDateFrom ||
       searchDateTo ||
-      searchTags.length > 0
+      searchTags.length > 0 ||
+      isHistoryTodayActive
     );
 
     if (hasActiveFilters) {
@@ -874,6 +910,7 @@ function resetAllFilters(container: HTMLElement): void {
   searchDateFrom = '';
   searchDateTo = '';
   searchTags = [];
+  isHistoryTodayActive = false;
 
   // 复位左侧 UI
   container.querySelectorAll('.cat-list-item').forEach(b => b.classList.remove('active'));
@@ -883,6 +920,7 @@ function resetAllFilters(container: HTMLElement): void {
   // 复位高级筛选区 UI
   container.querySelectorAll('.filter-mood-btn').forEach(b => b.classList.remove('active'));
   container.querySelectorAll('.filter-tag-btn').forEach(b => b.classList.remove('active'));
+  container.querySelector('#history-today-btn')?.classList.remove('active');
   if (filterDatePickerFrom) filterDatePickerFrom.setDate('');
   if (filterDatePickerTo) filterDatePickerTo.setDate('');
 
