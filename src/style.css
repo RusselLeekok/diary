@@ -326,10 +326,7 @@ body {
 /* main-content 占满外框余量空间 */
 #main-content {
   flex: 1;
-  /* scrollbar-gutter: stable 预留滚动条宽度不再旉动布局 */
-  scrollbar-gutter: stable;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -1754,8 +1751,11 @@ body {
 .page-stats {
   overflow-y: auto;
   overflow-x: hidden;
-  scrollbar-gutter: stable;
   padding: 28px 36px 60px;
+  scrollbar-width: none; /* Firefox */
+}
+.page-stats::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge */
 }
 
 .stats-hero {
@@ -2145,12 +2145,16 @@ body {
 
 /* ==================== 设置页 ==================== */
 .page-settings {
-  flex: none !important;
-  overflow: visible !important;
+  flex: 1 !important;
+  overflow-y: auto !important;
   padding: 28px 36px 60px;
   max-width: 980px;
   margin: 0 auto;
   width: 100%;
+  scrollbar-width: none; /* Firefox */
+}
+.page-settings::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge */
 }
 
 .settings-sections { display: flex; flex-direction: column; gap: 20px; }
@@ -3612,7 +3616,10 @@ body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  scrollbar-gutter: stable;
+  scrollbar-width: none; /* Firefox */
+}
+.trash-scroll::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge */
 }
 
 .trash-inner {
@@ -4531,7 +4538,7 @@ body {
 .user-dropdown-menu {
   position: absolute;
   top: 110%;
-  right: 0;
+  left: 50%;
   background: var(--bg-card);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
@@ -4539,7 +4546,7 @@ body {
   min-width: 140px;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(6px);
+  transform: translateX(-50%) translateY(6px);
   transition: all 0.22s var(--ease-spring);
   z-index: 1000;
   padding: 6px 0;
@@ -4549,7 +4556,7 @@ body {
 .topbar-user-menu.active .user-dropdown-menu {
   opacity: 1;
   visibility: visible;
-  transform: translateY(0);
+  transform: translateX(-50%) translateY(0);
 }
 
 .user-dropdown-item {

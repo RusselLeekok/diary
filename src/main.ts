@@ -78,15 +78,29 @@ async function bootstrap(): Promise<void> {
   applyAppearance();
   const mainEl = renderAppShell();
 
-  await initStore();
-  // 检查本地 Token 并自动校验登录状态
-  await checkAuth();
-
-  persistConfiguredAppearanceFallback();
-  applyAppearance();
-  renderTopbar(document.getElementById('app-topbar')!);
   registerAppRoutes(mainEl);
+  const topbarEl = document.getElementById('app-topbar')!;
+
+  const storeReady = initStore().catch(error => {
+    console.error('初始化本地状态失败:', error);
+  });
+
+  renderTopbar(topbarEl);
   initRouter();
+
+  void checkAuth()
+    .then(() => {
+      renderTopbar(topbarEl);
+    })
+    .catch(error => {
+      console.error('登录状态校验失败:', error);
+    });
+
+  void storeReady.then(() => {
+    persistConfiguredAppearanceFallback();
+    applyAppearance();
+    renderTopbar(topbarEl);
+  });
 }
 
 bootstrap().catch(err => {

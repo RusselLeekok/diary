@@ -1,4 +1,4 @@
-import { apiRequest, jsonBody } from '../services/apiClient';
+import { ApiError, apiRequest, jsonBody } from '../services/apiClient';
 
 export interface User {
   id: string;
@@ -104,6 +104,7 @@ export function logout(): void {
   setAuthToken(null);
   setCurrentUser(null);
   sessionStorage.removeItem('list-scroll-top');
+  sessionStorage.removeItem('list-visible-entry-count');
   
   // Safely trigger routing to login by modifying hash
   window.location.hash = '#/login';
@@ -115,20 +116,57 @@ export function logout(): void {
 export async function checkAuth(): Promise<User | null> {
   const token = getToken();
   if (!token) {
-    logout();
+    setAuthToken(null);
+    setCurrentUser(null);
     return null;
   }
 
   try {
-    const user = await apiRequest<User>('/auth/me');
+    const user = await requestCurrentUser();
     setCurrentUser(user);
     state.isAuthenticated = true;
     return user;
   } catch (error) {
     console.error('Session verification failed:', error);
-    logout();
-    return null;
+    if (isAuthInvalidError(error)) {
+      try {
+        await delay(200);
+        const user = await requestCurrentUser();
+        setCurrentUser(user);
+        state.isAuthenticated = true;
+        return user;
+      } catch (retryError) {
+        if (isAuthInvalidError(retryError)) {
+          logout();
+          return null;
+        }
+        state.isAuthenticated = Boolean(state.token && state.currentUser);
+        return state.currentUser;
+      }
+    }
+
+    // 连续刷新、后端短暂不可用或请求被浏览器中断时，不应清掉仍可能有效的登录态。
+    state.isAuthenticated = Boolean(state.token && state.currentUser);
+    return state.currentUser;
   }
+}
+
+function requestCurrentUser(): Promise<User> {
+  return apiRequest<User>('/auth/me', { skipAuthRedirect: true });
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function isAuthInvalidError(error: unknown): boolean {
+  if (error instanceof ApiError) {
+    return error.status === 401 || error.status === 404;
+  }
+  return typeof error === 'object'
+    && error !== null
+    && 'status' in error
+    && ((error as { status: unknown }).status === 401 || (error as { status: unknown }).status === 404);
 }
 
 /**

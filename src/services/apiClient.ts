@@ -14,7 +14,12 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+interface ApiRequestOptions extends RequestInit {
+  skipAuthRedirect?: boolean;
+}
+
+export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+  const { skipAuthRedirect = false, ...fetchOptions } = options;
   const headers = new Headers(options.headers);
   if (options.body !== undefined && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
@@ -28,7 +33,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
-      ...options,
+      ...fetchOptions,
       headers,
       credentials: 'include',
     });
@@ -50,7 +55,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     : await response.text();
 
   if (!response.ok) {
-    if (response.status === 401 && !path.includes('/auth/login') && !path.includes('/auth/register')) {
+    if (response.status === 401 && !skipAuthRedirect && !path.includes('/auth/login') && !path.includes('/auth/register')) {
       localStorage.removeItem('diary-token');
       localStorage.removeItem('diary-user');
       window.location.hash = '#/login';
