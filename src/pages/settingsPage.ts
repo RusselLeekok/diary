@@ -180,6 +180,7 @@ function bindSettingsEvents(container: HTMLElement): void {
     btn.addEventListener('click', async () => {
       const size = (btn as HTMLElement).dataset.size as 'sm' | 'md' | 'lg' | 'xl';
       await updateConfig('fontSize', size);
+      localStorage.setItem('diary-font-size', size);
       document.documentElement.dataset.fontSize = size;
       container.querySelectorAll('.font-size-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');

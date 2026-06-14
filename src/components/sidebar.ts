@@ -1,4 +1,4 @@
-import { navigate } from '../router/router';
+import { getCurrentPage, navigate } from '../router/router';
 import type { PageName } from '../types';
 import { getAppConfig, updateConfig } from '../store/appStore';
 import { showToast } from './toast';
@@ -48,6 +48,7 @@ const NAV_ITEMS: { page: PageName; icon: string; label: string }[] = [
 export function renderTopbar(container: HTMLElement): void {
   const isDark = getAppConfig().theme === 'dark' ||
     document.documentElement.classList.contains('dark');
+  const activePage = getCurrentPage();
 
   container.innerHTML = `
     <header class="app-topbar" role="banner">
@@ -60,7 +61,7 @@ export function renderTopbar(container: HTMLElement): void {
       <!-- 中间导航 -->
       <nav class="topbar-nav" role="navigation" aria-label="主导航">
         ${NAV_ITEMS.map(item => `
-          <button class="nav-item" data-page="${item.page}" title="${item.label}" aria-label="${item.label}">
+          <button class="nav-item ${item.page === activePage ? 'active' : ''}" data-page="${item.page}" title="${item.label}" aria-label="${item.label}">
             <span class="nav-icon">${item.icon}</span>
             <span class="nav-label">${item.label}</span>
           </button>

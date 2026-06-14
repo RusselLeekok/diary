@@ -1,9 +1,11 @@
-import type { AppConfig, DiaryEntry } from '../types';
+import type { AppConfig, DiaryEntry, DiaryEntrySummary } from '../types';
 import { DEFAULT_CONFIG } from '../types';
 import {
   createCategory,
   deleteCategoryByName,
   getAllEntries,
+  getEntryById,
+  getEntrySummaries,
   getConfig,
   renameCategoryByName,
   setConfigItem,
@@ -13,7 +15,9 @@ import {
 
 interface AppState {
   config: AppConfig;
-  allEntries: DiaryEntry[];
+  allEntries: DiaryEntrySummary[];
+  fullEntryCache: Map<string, DiaryEntry>;
+  entrySummariesLoaded: boolean;
   currentEditId: string | null;    // 当前正在编辑的日记 ID（null = 新建）
   isUnlocked: boolean;             // 应用是否已解锁
   allTags: string[];               // 所有已使用的标签
@@ -22,25 +26,34 @@ interface AppState {
 const state: AppState = {
   config: { ...DEFAULT_CONFIG },
   allEntries: [],
+  fullEntryCache: new Map(),
+  entrySummariesLoaded: false,
   currentEditId: null,
   isUnlocked: false,
   allTags: [],
 };
 
+let entrySummaryRefreshPromise: Promise<DiaryEntrySummary[]> | null = null;
+const ENTRY_SUMMARIES_CACHE_KEY = 'diary-entry-summaries-v1';
+
 // ==================== 初始化 ====================
 
 /** 初始化状态（从 DB 加载配置和日记列表） */
 export async function initStore(): Promise<void> {
+  hydrateEntrySummariesCache();
+  refreshTags();
+
   state.config = await getConfig();
   if (!state.config.categories) {
     state.config.categories = ['生活', '工作', '心情', '随笔'];
     await setConfigItem('categories', state.config.categories);
   }
-  state.allEntries = await getAllEntries();
   // 合并配置中的分类以及日记中已经使用的标签并去重
-  const tagSet = new Set<string>(state.config.categories);
-  state.allEntries.forEach(e => e.tags.forEach(t => tagSet.add(t)));
-  state.allTags = Array.from(tagSet).sort();
+  refreshTags();
+  refreshTags();
+  void refreshEntrySummaries().catch(error => {
+    console.error('初始化日记摘要失败:', error);
+  });
   // 如果没有密码则直接解锁
   if (!state.config.hasPassword) {
     state.isUnlocked = true;
@@ -50,10 +63,14 @@ export async function initStore(): Promise<void> {
 // ==================== Getters ====================
 
 export function getAppConfig(): AppConfig { return state.config; }
-export function getEntries(): DiaryEntry[] { return state.allEntries; }
+export function getEntries(): DiaryEntrySummary[] { return state.allEntries; }
 export function getCurrentEditId(): string | null { return state.currentEditId; }
 export function isAppUnlocked(): boolean { return state.isUnlocked; }
 export function getAllTagsList(): string[] { return state.allTags; }
+export function hasEntrySummaries(): boolean { return state.entrySummariesLoaded; }
+export function getEntrySummaryById(id: string): DiaryEntrySummary | undefined {
+  return state.allEntries.find(entry => entry.id === id);
+}
 
 // ==================== Setters ====================
 
@@ -72,11 +89,135 @@ export async function updateConfig(key: keyof AppConfig, value: unknown): Promis
 
 /** 重新从 DB 刷新日记列表 */
 export async function refreshEntries(): Promise<DiaryEntry[]> {
-  state.allEntries = await getAllEntries();
+  const fullEntries = await getAllEntries();
+  state.allEntries = fullEntries.map(entry => ({
+    id: entry.id,
+    title: entry.title,
+    plainText: entry.plainText.slice(0, 240),
+    mood: entry.mood,
+    tags: entry.tags,
+    wordCount: entry.wordCount,
+    isLocked: entry.isLocked,
+    isDeleted: entry.isDeleted,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+    dateFor: entry.dateFor,
+    timeFor: entry.timeFor,
+    weather: entry.weather,
+    location: entry.location,
+    firstImageSrc: extractFirstImageSrc(entry.content)
+      ? `/api/v1/entries/${encodeURIComponent(entry.id)}/first-image`
+      : '',
+  }));
+  state.fullEntryCache.clear();
+  fullEntries.forEach(entry => state.fullEntryCache.set(entry.id, entry));
+  state.entrySummariesLoaded = true;
+  refreshTags();
+  persistEntrySummariesCache();
+  return fullEntries;
+}
+
+export async function refreshEntrySummaries(): Promise<DiaryEntrySummary[]> {
+  if (entrySummaryRefreshPromise) return entrySummaryRefreshPromise;
+
+  entrySummaryRefreshPromise = getEntrySummaries()
+    .then(entries => {
+      state.allEntries = entries;
+      state.entrySummariesLoaded = true;
+      refreshTags();
+      persistEntrySummariesCache();
+      return state.allEntries;
+    })
+    .finally(() => {
+      entrySummaryRefreshPromise = null;
+    });
+
+  return entrySummaryRefreshPromise;
+}
+
+export async function getFullEntryById(id: string): Promise<DiaryEntry | undefined> {
+  const cached = state.fullEntryCache.get(id);
+  if (cached) return cached;
+
+  const entry = await getEntryById(id);
+  if (entry) state.fullEntryCache.set(id, entry);
+  return entry;
+}
+
+export function cacheFullEntry(entry: DiaryEntry): void {
+  state.fullEntryCache.set(entry.id, entry);
+}
+
+export function invalidateEntryCache(id?: string): void {
+  if (id) state.fullEntryCache.delete(id);
+  else state.fullEntryCache.clear();
+}
+
+function refreshTags(): void {
   const tagSet = new Set<string>(state.config.categories || []);
   state.allEntries.forEach(e => e.tags.forEach(t => tagSet.add(t)));
   state.allTags = Array.from(tagSet).sort();
-  return state.allEntries;
+}
+
+function extractFirstImageSrc(html: string): string {
+  return html.match(/<img[^>]+src=(["'])(.*?)\1/i)?.[2] ?? '';
+}
+
+function hydrateEntrySummariesCache(): void {
+  if (typeof sessionStorage === 'undefined') return;
+
+  try {
+    const raw = sessionStorage.getItem(ENTRY_SUMMARIES_CACHE_KEY);
+    if (!raw) return;
+
+    const cached = JSON.parse(raw) as unknown;
+    if (!Array.isArray(cached)) {
+      sessionStorage.removeItem(ENTRY_SUMMARIES_CACHE_KEY);
+      return;
+    }
+
+    state.allEntries = cached
+      .map(normalizeCachedSummary)
+      .filter((entry): entry is DiaryEntrySummary => Boolean(entry));
+    state.entrySummariesLoaded = true;
+  } catch (error) {
+    sessionStorage.removeItem(ENTRY_SUMMARIES_CACHE_KEY);
+    console.warn('恢复日记摘要缓存失败:', error);
+  }
+}
+
+function persistEntrySummariesCache(): void {
+  if (typeof sessionStorage === 'undefined') return;
+
+  try {
+    sessionStorage.setItem(ENTRY_SUMMARIES_CACHE_KEY, JSON.stringify(state.allEntries));
+  } catch (error) {
+    console.warn('保存日记摘要缓存失败:', error);
+  }
+}
+
+function normalizeCachedSummary(value: unknown): DiaryEntrySummary | null {
+  if (!value || typeof value !== 'object') return null;
+  const entry = value as Partial<DiaryEntrySummary>;
+  if (!entry.id || !entry.dateFor) return null;
+
+  return {
+    id: String(entry.id),
+    title: String(entry.title ?? ''),
+    plainText: String(entry.plainText ?? ''),
+    mood: entry.mood ?? 'none',
+    tags: Array.isArray(entry.tags) ? entry.tags.map(String) : [],
+    wordCount: Number(entry.wordCount) || 0,
+    isLocked: Boolean(entry.isLocked),
+    isDeleted: Boolean(entry.isDeleted),
+    createdAt: String(entry.createdAt ?? ''),
+    updatedAt: String(entry.updatedAt ?? ''),
+    dateFor: String(entry.dateFor),
+    timeFor: entry.timeFor ? String(entry.timeFor) : undefined,
+    weather: entry.weather,
+    location: entry.location ? String(entry.location) : '',
+    firstImageSrc: entry.firstImageSrc ? String(entry.firstImageSrc) : '',
+  };
 }
 
 /** 添加新分类 */
@@ -87,7 +228,7 @@ export async function addCategory(name: string): Promise<void> {
   if (!categories.includes(name)) {
     await createCategory(name);
     state.config.categories = [...categories, name];
-    await refreshEntries();
+    await refreshEntrySummaries();
   }
 }
 
@@ -106,7 +247,7 @@ export async function renameCategory(oldName: string, newName: string): Promise<
   const uniqueCategories = Array.from(new Set(categories));
   state.config.categories = uniqueCategories;
 
-  await refreshEntries();
+  await refreshEntrySummaries();
 }
 
 /** 删除分类 */
@@ -122,5 +263,5 @@ export async function deleteCategory(name: string): Promise<void> {
   categories = categories.filter(c => c !== name);
   state.config.categories = categories;
 
-  await refreshEntries();
+  await refreshEntrySummaries();
 }

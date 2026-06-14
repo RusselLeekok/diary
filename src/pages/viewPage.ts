@@ -1,5 +1,5 @@
-import { getEntryById, trashEntry } from '../services/databaseService';
-import { refreshEntries, getAllTagsList, getEntries } from '../store/appStore';
+import { trashEntry } from '../services/databaseService';
+import { refreshEntrySummaries, getFullEntryById, getAllTagsList, getEntries } from '../store/appStore';
 import { navigate } from '../router/router';
 
 let viewPageKeyDownHandler: ((e: KeyboardEvent) => void) | null = null;
@@ -51,7 +51,8 @@ export async function renderViewPage(mainEl: HTMLElement, params?: Record<string
 
   if (!id) { renderError(); return; }
 
-  const entry = await getEntryById(id);
+  const entry = await getFullEntryById(id);
+  if (!isCurrentView(id)) return;
   if (!entry) { renderError(); return; }
 
   const allEntries = getEntries();
@@ -72,7 +73,7 @@ export async function renderViewPage(mainEl: HTMLElement, params?: Record<string
     : '<p style="color:var(--text-muted);font-style:italic">这篇日记没有正文内容。</p>';
 
   mainEl.innerHTML = `
-    <div class="page-view">
+    <div class="page-view" style="position: relative;">
 
       <!-- ★ 顶部固定操作栏（与编辑器顶栏同款） -->
       <div class="view-topbar">
@@ -99,27 +100,27 @@ export async function renderViewPage(mainEl: HTMLElement, params?: Record<string
         </div>
       </div>
 
+      <!-- 上一篇 (Newer) 按钮 -->
+      ${prevEntry ? `
+        <button class="view-nav-btn view-nav-prev" id="view-prev" title="上一篇：${escapeHtml(prevEntry.title || '无标题')}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </button>
+      ` : ''}
+
+      <!-- 下一篇 (Older) 按钮 -->
+      ${nextEntry ? `
+        <button class="view-nav-btn view-nav-next" id="view-next" title="下一篇：${escapeHtml(nextEntry.title || '无标题')}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </button>
+      ` : ''}
+
       <!-- ★ 下方独立滚动区 -->
       <div class="view-scroll">
-        <div class="view-inner" style="position: relative;">
-
-          <!-- 上一篇 (Newer) 按钮 -->
-          ${prevEntry ? `
-            <button class="view-nav-btn view-nav-prev" id="view-prev" title="上一篇：${escapeHtml(prevEntry.title || '无标题')}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20">
-                <polyline points="15 18 9 12 15 6"/>
-              </svg>
-            </button>
-          ` : ''}
-
-          <!-- 下一篇 (Older) 按钮 -->
-          ${nextEntry ? `
-            <button class="view-nav-btn view-nav-next" id="view-next" title="下一篇：${escapeHtml(nextEntry.title || '无标题')}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20">
-                <polyline points="9 18 15 12 9 6"/>
-              </svg>
-            </button>
-          ` : ''}
+        <div class="view-inner">
 
           <!-- 日记主体卡片 -->
           <article class="view-card">
@@ -208,7 +209,7 @@ export async function renderViewPage(mainEl: HTMLElement, params?: Record<string
       onConfirm: async () => {
         cleanup();
         await trashEntry(id);
-        await refreshEntries();
+        await refreshEntrySummaries();
         showToast('日记已移入垃圾箱 ✓', { type: 'success' });
         navigate('list');
       },
@@ -253,6 +254,12 @@ export async function renderViewPage(mainEl: HTMLElement, params?: Record<string
       showImageLightbox((img as HTMLImageElement).src);
     });
   });
+}
+
+function isCurrentView(id: string): boolean {
+  if (!window.location.hash.startsWith('#/view')) return false;
+  const queryPart = window.location.hash.split('?')[1] || '';
+  return new URLSearchParams(queryPart).get('id') === id;
 }
 
 /** 显示大图灯箱预览 */
@@ -301,3 +308,4 @@ function showImageLightbox(src: string): void {
   lightbox.querySelector('.lightbox-image')?.addEventListener('click', closeLightbox); // 点击图片也可关闭
   document.addEventListener('keydown', handleEsc);
 }
+

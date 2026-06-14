@@ -81,6 +81,24 @@ export interface DiaryEntry {
   location?: string;
 }
 
+export interface DiaryEntrySummary {
+  id: string;
+  title: string;
+  plainText: string;      // 列表预览文本
+  mood: MoodType;
+  tags: string[];
+  wordCount: number;
+  isLocked: boolean;
+  createdAt: string;
+  updatedAt: string;
+  dateFor: string;
+  timeFor?: string;
+  isDeleted?: boolean;
+  weather?: WeatherType;
+  location?: string;
+  firstImageSrc?: string;
+}
+
 // 应用配置
 export interface AppConfig {
   theme: 'light' | 'dark' | 'green' | 'blue' | 'pink' | 'plain';

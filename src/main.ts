@@ -13,6 +13,7 @@ import { renderTrashPage } from './pages/trashPage';
 import { escapeHtml } from './utils/htmlUtils';
 
 const THEME_VALUES = new Set(['light', 'dark', 'green', 'blue', 'pink', 'plain']);
+const FONT_SIZE_VALUES = new Set(['sm', 'md', 'lg', 'xl']);
 
 function getInitialTheme(): string {
   const storedTheme = localStorage.getItem('diary-theme');
@@ -20,29 +21,32 @@ function getInitialTheme(): string {
   return getAppConfig().theme;
 }
 
-/** 应用入口 */
-async function bootstrap(): Promise<void> {
-  // 初始化状态
-  await initStore();
+function getInitialFontSize(): string {
+  const storedFontSize = localStorage.getItem('diary-font-size');
+  if (storedFontSize && FONT_SIZE_VALUES.has(storedFontSize)) return storedFontSize;
+  return getAppConfig().fontSize;
+}
 
-  // 应用已保存的主题
+function applyAppearance(): void {
   const savedTheme = getInitialTheme();
   document.documentElement.dataset.theme = savedTheme;
   localStorage.setItem('diary-theme', savedTheme);
   if (savedTheme !== 'dark') {
     localStorage.setItem('diary-last-light-theme', savedTheme);
   }
-  if (savedTheme === 'dark') {
-    document.documentElement.classList.add('dark');
-  } else {
-    document.documentElement.classList.remove('dark');
+  document.documentElement.classList.toggle('dark', savedTheme === 'dark');
+  document.documentElement.dataset.fontSize = getInitialFontSize();
+}
+
+function persistConfiguredAppearanceFallback(): void {
+  const config = getAppConfig();
+  const storedFontSize = localStorage.getItem('diary-font-size');
+  if (!storedFontSize || !FONT_SIZE_VALUES.has(storedFontSize)) {
+    localStorage.setItem('diary-font-size', config.fontSize);
   }
+}
 
-  // 应用字体大小
-  document.documentElement.dataset.fontSize = getAppConfig().fontSize;
-
-  // 构建永久固定的骨架结构（顶部导航 + 内容包裹层）
-  // 内容包裹层(.app-main-wrap)固定不变，只替换内部的 #main-content
+function renderAppShell(): HTMLElement {
   document.getElementById('app')!.innerHTML = `
     <div class="app-layout">
       <div id="app-topbar"></div>
@@ -54,22 +58,28 @@ async function bootstrap(): Promise<void> {
     </div>
   `;
 
-  // 渲染顶部导航
-  renderTopbar(document.getElementById('app-topbar')!);
+  return document.getElementById('main-content')!;
+}
 
-  // 获取主内容区域
-  const mainEl = document.getElementById('main-content')!;
-
-  // 注册路由
-  registerRoute('list',     (_p) => renderListPage(mainEl));
-  registerRoute('editor',   (p)  => renderEditorPage(mainEl, p));
+function registerAppRoutes(mainEl: HTMLElement): void {
+  registerRoute('list', (_p) => renderListPage(mainEl));
+  registerRoute('editor', (p) => renderEditorPage(mainEl, p));
   registerRoute('calendar', (_p) => renderCalendarPage(mainEl));
-  registerRoute('trash',    (_p) => renderTrashPage(mainEl));
-  registerRoute('stats',    (_p) => renderStatsPage(mainEl));
+  registerRoute('trash', (_p) => renderTrashPage(mainEl));
+  registerRoute('stats', (_p) => renderStatsPage(mainEl));
   registerRoute('settings', (_p) => renderSettingsPage(mainEl));
-  registerRoute('view',     (p)  => renderViewPage(mainEl, p));
+  registerRoute('view', (p) => renderViewPage(mainEl, p));
+}
 
-  // 启动路由
+async function bootstrap(): Promise<void> {
+  applyAppearance();
+  const mainEl = renderAppShell();
+
+  await initStore();
+  persistConfiguredAppearanceFallback();
+  applyAppearance();
+  renderTopbar(document.getElementById('app-topbar')!);
+  registerAppRoutes(mainEl);
   initRouter();
 }
 
@@ -78,7 +88,7 @@ bootstrap().catch(err => {
   document.getElementById('app')!.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#666">
       <div style="text-align:center">
-        <div style="font-size:3rem;margin-bottom:1rem">😵</div>
+        <div style="font-size:3rem;margin-bottom:1rem">!</div>
         <h2>应用加载失败</h2>
         <p>请刷新页面重试</p>
         <pre style="font-size:12px;color:#999;margin-top:1rem">${escapeHtml(err?.message || '')}</pre>

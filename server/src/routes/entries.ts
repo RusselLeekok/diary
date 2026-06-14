@@ -1,10 +1,12 @@
-import type { FastifyInstance } from 'fastify';
+﻿import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
   getUserId,
+  extractFirstImageSrc,
   moods,
   normalizeEntryPayload,
   rowToEntry,
+  rowToEntrySummary,
   selectEntryById,
   upsertEntry,
   type EntryPayload,
@@ -38,9 +40,26 @@ const listQuerySchema = z.object({
   includeDeleted: z.enum(['true', 'false']).optional(),
   limit: z.coerce.number().int().min(1).max(500).optional(),
   sort: z.enum(['dateFor_desc', 'updatedAt_desc']).optional(),
+  view: z.enum(['summary', 'full']).optional(),
 });
 
 const idParamsSchema = z.object({ id: z.string().min(1) });
+
+function parseDataImage(src: string): { mime: string; bytes: Buffer } | null {
+  const match = src.match(/^data:([^;,]+)?(;base64)?,(.*)$/s);
+  if (!match) return null;
+
+  const mime = match[1] || 'application/octet-stream';
+  if (!mime.startsWith('image/')) return null;
+
+  const isBase64 = Boolean(match[2]);
+  const payload = match[3] || '';
+  const bytes = isBase64
+    ? Buffer.from(payload, 'base64')
+    : Buffer.from(decodeURIComponent(payload), 'utf8');
+
+  return { mime, bytes };
+}
 
 export async function registerEntryRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/v1/entries', async (request) => {
@@ -95,7 +114,11 @@ export async function registerEntryRoutes(app: FastifyInstance): Promise<void> {
       LIMIT ?
     `).all(...params) as unknown as EntryRow[];
 
-    return { entries: rows.map(rowToEntry) };
+    return {
+      entries: query.view === 'summary'
+        ? rows.map(rowToEntrySummary)
+        : rows.map(rowToEntry),
+    };
   });
 
   app.post('/api/v1/entries', async (request, reply) => {
@@ -109,6 +132,37 @@ export async function registerEntryRoutes(app: FastifyInstance): Promise<void> {
   app.delete('/api/v1/entries', async (_request, reply) => {
     const result = app.db.prepare('DELETE FROM entries WHERE user_id = ?').run(getUserId());
     return reply.send({ deleted: result.changes });
+  });
+
+  app.get('/api/v1/entries/:id/first-image', async (request, reply) => {
+    const { id } = idParamsSchema.parse(request.params);
+    const row = selectEntryById(app.db, id);
+    if (!row || row.is_deleted) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Entry not found' });
+    }
+
+    const src = extractFirstImageSrc(row.content_html);
+    if (!src) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Entry has no image' });
+    }
+
+    if (src.startsWith('data:')) {
+      const image = parseDataImage(src);
+      if (!image) {
+        return reply.status(415).send({ error: 'UNSUPPORTED_IMAGE', message: 'Unsupported image format' });
+      }
+
+      return reply
+        .header('Content-Type', image.mime)
+        .header('Cache-Control', 'private, max-age=86400')
+        .send(image.bytes);
+    }
+
+    if (/^https?:\/\//i.test(src) || src.startsWith('/')) {
+      return reply.redirect(src);
+    }
+
+    return reply.status(415).send({ error: 'UNSUPPORTED_IMAGE', message: 'Unsupported image source' });
   });
 
   app.get('/api/v1/entries/:id', async (request, reply) => {

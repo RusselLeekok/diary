@@ -1,5 +1,5 @@
 import { getTrashedEntries, restoreEntry, deleteEntry, clearTrash } from '../services/databaseService';
-import { refreshEntries } from '../store/appStore';
+import { refreshEntrySummaries } from '../store/appStore';
 import { navigate } from '../router/router';
 import { MOOD_CONFIG } from '../types';
 import type { DiaryEntry } from '../types';
@@ -128,7 +128,7 @@ function bindPageEvents(container: HTMLElement): void {
       confirmClass: 'btn-danger',
       onConfirm: async () => {
         await clearTrash();
-        await refreshEntries();
+        await refreshEntrySummaries();
         showToast('垃圾箱已彻底清空', { type: 'success' });
         buildPage(container, []);
       }
@@ -143,7 +143,7 @@ function bindPageEvents(container: HTMLElement): void {
     card.querySelector('.trash-btn-restore')?.addEventListener('click', async (e) => {
       e.stopPropagation();
       await restoreEntry(id);
-      await refreshEntries();
+      await refreshEntrySummaries();
       showToast('日记已恢复 ✓', { type: 'success' });
       // 局部刷新
       const updated = await getTrashedEntries();
@@ -160,7 +160,7 @@ function bindPageEvents(container: HTMLElement): void {
         confirmClass: 'btn-danger',
         onConfirm: async () => {
           await deleteEntry(id);
-          await refreshEntries();
+          await refreshEntrySummaries();
           showToast('日记已永久删除', { type: 'success' });
           const updated = await getTrashedEntries();
           buildPage(container, updated);

@@ -1,4 +1,4 @@
-import type { AppConfig, DiaryEntry, MoodType, WeatherType } from '../types';
+import type { AppConfig, DiaryEntry, DiaryEntrySummary, MoodType, WeatherType } from '../types';
 import { DEFAULT_CONFIG, MOOD_CONFIG, WEATHER_CONFIG } from '../types';
 import { apiRequest, jsonBody, API_BASE_URL } from './apiClient';
 
@@ -7,6 +7,10 @@ interface EntryResponse {
 }
 
 interface EntriesResponse {
+  entries: ServerEntry[];
+}
+
+interface EntrySummariesResponse {
   entries: ServerEntry[];
 }
 
@@ -27,6 +31,7 @@ interface ServerEntry {
   timeFor?: string;
   weather?: string;
   location?: string;
+  firstImageSrc?: string;
 }
 
 interface CategoriesResponse {
@@ -91,6 +96,36 @@ function toDiaryEntry(entry: ServerEntry): DiaryEntry {
   };
 }
 
+function toDiaryEntrySummary(entry: ServerEntry): DiaryEntrySummary {
+  const mood = entry.mood in MOOD_CONFIG ? entry.mood as MoodType : 'none';
+  const weather = entry.weather && entry.weather in WEATHER_CONFIG ? entry.weather as WeatherType : 'none';
+  return {
+    id: entry.id,
+    title: entry.title,
+    plainText: entry.plainText ?? '',
+    mood,
+    tags: entry.tags ?? [],
+    wordCount: Number(entry.wordCount) || 0,
+    isLocked: Boolean(entry.isLocked),
+    isDeleted: Boolean(entry.isDeleted),
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+    dateFor: entry.dateFor,
+    timeFor: entry.timeFor,
+    weather,
+    location: entry.location ?? '',
+    firstImageSrc: normalizeApiAssetSrc(entry.firstImageSrc ?? ''),
+  };
+}
+
+function normalizeApiAssetSrc(src: string): string {
+  const apiPrefix = '/api/v1';
+  if (src.startsWith(apiPrefix)) {
+    return `${API_BASE_URL}${src.slice(apiPrefix.length)}`;
+  }
+  return src;
+}
+
 function entryPayload(entry: DiaryEntry) {
   return {
     id: entry.id,
@@ -109,6 +144,11 @@ function entryPayload(entry: DiaryEntry) {
 export async function getAllEntries(): Promise<DiaryEntry[]> {
   const data = await apiRequest<EntriesResponse>('/entries?limit=500');
   return data.entries.map(toDiaryEntry);
+}
+
+export async function getEntrySummaries(): Promise<DiaryEntrySummary[]> {
+  const data = await apiRequest<EntrySummariesResponse>('/entries?view=summary&limit=500');
+  return data.entries.map(toDiaryEntrySummary);
 }
 
 export async function getEntryById(id: string): Promise<DiaryEntry | undefined> {

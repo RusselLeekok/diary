@@ -1,8 +1,8 @@
 import Quill from 'quill';
 import type { DiaryEntry, MoodType, WeatherType } from '../types';
 import { MOOD_CONFIG, WEATHER_CONFIG } from '../types';
-import { getEntryById, saveEntry } from '../services/databaseService';
-import { refreshEntries, getAllTagsList, getEntries, addCategory } from '../store/appStore';
+import { saveEntry } from '../services/databaseService';
+import { cacheFullEntry, getFullEntryById, refreshEntrySummaries, getAllTagsList, getEntries, addCategory } from '../store/appStore';
 import { navigate } from '../router/router';
 import { showCategoryModal } from '../components/categoryModal';
 import { showToast } from '../components/toast';
@@ -42,7 +42,7 @@ export async function renderEditorPage(mainEl: HTMLElement, params?: Record<stri
   const editId = params?.id || null;
   let loadedEntry: DiaryEntry | null = null;
   if (editId) {
-    loadedEntry = (await getEntryById(editId)) || null;
+    loadedEntry = (await getFullEntryById(editId)) || null;
   }
 
   const dateValue = loadedEntry?.dateFor || params?.date || today();
@@ -400,7 +400,8 @@ function bindEditorEvents(
       location: selectedLocation,
     };
     await saveEntry(entry);
-    await refreshEntries();
+    cacheFullEntry(entry);
+    await refreshEntrySummaries();
     savedEntry = entry;
     if (showIndicator) {
       showAutoSaveIndicator();
@@ -889,7 +890,7 @@ function bindEditorEvents(
         // 弹出弹窗
         showCategoryModal(async () => {
           // 弹窗关闭后，刷新 entries
-          await refreshEntries();
+          await refreshEntrySummaries();
           
           // 如果当前选择的分类已经不在列表中了，将其设为“未分类”
           const allTagsNow = getAllTagsList();

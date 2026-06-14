@@ -1,33 +1,30 @@
-import type { DiaryEntry } from '../types';
+import type { DiaryEntrySummary } from '../types';
 import { MOOD_CONFIG, WEATHER_CONFIG } from '../types';
 import { formatDisplayDate, formatRelativeTime } from '../utils/dateUtils';
 import { navigate } from '../router/router';
 import { trashEntry } from '../services/databaseService';
-import { refreshEntries, getAllTagsList } from '../store/appStore';
+import { refreshEntrySummaries, getAllTagsList } from '../store/appStore';
 import { getCategoryColor } from '../utils/categoryUtils';
 import { showModal } from './modal';
 import { showToast } from './toast';
-import { escapeHtml, sanitizeDiaryContent } from '../utils/htmlUtils';
-
-function extractFirstImageUrl(html: string): string | null {
-  const match = html.match(/<img[^>]+src="([^">]+)"/i);
-  return match ? match[1] : null;
-}
+import { escapeHtml } from '../utils/htmlUtils';
 
 /** 渲染单张日记卡片 HTML */
-export function renderDiaryCard(entry: DiaryEntry): string {
+export function renderDiaryCard(entry: DiaryEntrySummary): string {
   const mood = MOOD_CONFIG[entry.mood] ?? MOOD_CONFIG.none;
   const weather = entry.weather && entry.weather in WEATHER_CONFIG ? WEATHER_CONFIG[entry.weather] : null;
 
   const weatherBadge = weather && entry.weather !== 'none' ? `
-    <span class="card-weather-badge-inline" data-tooltip="${weather.label}" style="background:${weather.color}20;color:${weather.color}">
-      ${weather.emoji}
+    <span class="card-weather-tag" style="--raw-color:${weather.color}">
+      <span class="badge-emoji">${weather.emoji}</span>
+      <span class="badge-label">${weather.label}</span>
     </span>
   ` : '';
 
   const moodBadge = entry.mood && entry.mood !== 'none' ? `
-    <span class="card-mood-badge-inline" data-tooltip="${mood.label}" style="background:${mood.color}20;color:${mood.color}">
-      ${mood.emoji}
+    <span class="card-mood-tag" style="--raw-color:${mood.color}">
+      <span class="badge-emoji">${mood.emoji}</span>
+      <span class="badge-label">${mood.label}</span>
     </span>
   ` : '';
 
@@ -54,7 +51,7 @@ export function renderDiaryCard(entry: DiaryEntry): string {
   const safePreview = escapeHtml(preview);
   const safeDisplayDateText = escapeHtml(displayDateText);
 
-  const imgUrl = extractFirstImageUrl(sanitizeDiaryContent(entry.content));
+  const imgUrl = entry.firstImageSrc || '';
 
   if (imgUrl) {
     // 有配图：左右分栏布局
@@ -67,8 +64,6 @@ export function renderDiaryCard(entry: DiaryEntry): string {
               <div class="card-header-top-row">
                 <span class="card-date-text">${safeDisplayDateText}</span>
                 ${locationBadge}
-                ${weatherBadge}
-                ${moodBadge}
               </div>
               <span class="card-time">${formatRelativeTime(entry.updatedAt)}</span>
             </div>
@@ -76,7 +71,7 @@ export function renderDiaryCard(entry: DiaryEntry): string {
           ${entry.title ? `<h3 class="card-title">${escapeHtml(entry.title)}</h3>` : ''}
           ${preview ? `<p class="card-preview">${safePreview}${entry.plainText.length > 100 ? '…' : ''}</p>` : ''}
           <div class="card-footer">
-            <div class="card-tags">${tags}</div>
+            <div class="card-tags">${tags}${moodBadge}${weatherBadge}</div>
             <div class="card-meta">
               <span class="card-wordcount">${Number(entry.wordCount) || 0} 字</span>
               <button class="card-delete-btn" data-id="${safeId}" title="删除此日记" aria-label="删除">
@@ -88,7 +83,7 @@ export function renderDiaryCard(entry: DiaryEntry): string {
           </div>
         </div>
         <div class="card-image-right">
-          <img src="${escapeHtml(imgUrl)}" alt="日记配图" />
+          <img src="${escapeHtml(imgUrl)}" alt="日记配图" loading="lazy" decoding="async" />
         </div>
       </article>
     `;
@@ -102,8 +97,6 @@ export function renderDiaryCard(entry: DiaryEntry): string {
             <div class="card-header-top-row">
               <span class="card-date-text">${safeDisplayDateText}</span>
               ${locationBadge}
-              ${weatherBadge}
-              ${moodBadge}
             </div>
             <span class="card-time">${formatRelativeTime(entry.updatedAt)}</span>
           </div>
@@ -111,7 +104,7 @@ export function renderDiaryCard(entry: DiaryEntry): string {
         ${entry.title ? `<h3 class="card-title">${escapeHtml(entry.title)}</h3>` : ''}
         ${preview ? `<p class="card-preview">${safePreview}${entry.plainText.length > 100 ? '…' : ''}</p>` : ''}
         <div class="card-footer">
-          <div class="card-tags">${tags}</div>
+          <div class="card-tags">${tags}${moodBadge}${weatherBadge}</div>
           <div class="card-meta">
             <span class="card-wordcount">${Number(entry.wordCount) || 0} 字</span>
             <button class="card-delete-btn" data-id="${safeId}" title="删除此日记" aria-label="删除">
@@ -168,7 +161,7 @@ export function bindCardEvents(container: HTMLElement, onDelete?: () => void): v
         confirmClass: 'btn-danger',
         onConfirm: async () => {
           await trashEntry(id);
-          await refreshEntries();
+          if (!onDelete) await refreshEntrySummaries();
           showToast('日记已移入垃圾箱', { type: 'success' });
           onDelete?.();
         },

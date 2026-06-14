@@ -1,7 +1,7 @@
-import { getEntries, refreshEntries, getAllTagsList } from '../store/appStore';
+import { getEntries, refreshEntrySummaries, hasEntrySummaries, getAllTagsList } from '../store/appStore';
 import { renderDiaryCard, bindCardEvents } from '../components/diaryCard';
 import { navigate } from '../router/router';
-import type { DiaryEntry, MoodType } from '../types';
+import type { DiaryEntrySummary, MoodType } from '../types';
 import { MOOD_CONFIG } from '../types';
 import { buildCategoryStats, getCategoryColor } from '../utils/categoryUtils';
 import { showCategoryModal } from '../components/categoryModal';
@@ -29,7 +29,7 @@ let calYear = new Date().getFullYear();
 let calMonth = new Date().getMonth();
 let selectedDate: string | null = null;
 let selectedCategory: string | null = null;  // null=全部, ''=未分类, 'xxx'=具体分类
-let currentEntries: DiaryEntry[] = [];
+let currentEntries: DiaryEntrySummary[] = [];
 let sidebarTab: 'calendar' | 'category' = 'category';
 
 // 搜索筛选状态
@@ -39,6 +39,7 @@ let searchDateFrom = '';
 let searchDateTo = '';
 let searchTags: string[] = [];
 let isFilterExpanded = false;
+let isEntriesLoading = false;
 
 // 防抖计时器
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -49,7 +50,8 @@ function debounce(fn: () => void, delay: number) {
 
 export async function renderListPage(mainEl: HTMLElement, params?: Record<string, string>): Promise<void> {
   destroyFilterPickers();
-  await refreshEntries();
+  const hadCache = hasEntrySummaries();
+  isEntriesLoading = !hadCache;
   currentEntries = getEntries();
 
   // 解析是否需要调起搜索
@@ -72,6 +74,7 @@ export async function renderListPage(mainEl: HTMLElement, params?: Record<string
   selectedDate = null;
   selectedCategory = null;
   buildPage(mainEl);
+  restoreListScroll(mainEl);
 
   // 自动聚焦搜索框
   if (shouldSearch || initKeyword) {
@@ -83,6 +86,28 @@ export async function renderListPage(mainEl: HTMLElement, params?: Record<string
     }
   }
 
+  void refreshEntrySummaries().then(() => {
+    const pageListEl = mainEl.querySelector('.page-list');
+    if (!pageListEl) return;
+
+    isEntriesLoading = false;
+    currentEntries = getEntries();
+    if (hadCache) {
+      refreshContent(mainEl);
+      refreshCalendar(mainEl);
+      refreshCategoryPanel(mainEl);
+    } else {
+      buildPage(mainEl);
+      restoreListScroll(mainEl);
+    }
+  }).catch(error => {
+    isEntriesLoading = false;
+    if (!hadCache) refreshContent(mainEl);
+    console.error('刷新日记摘要失败:', error);
+  });
+}
+
+function restoreListScroll(mainEl: HTMLElement): void {
   // 恢复之前滚动的滚动位置（同步设置消除闪屏）
   const savedScroll = sessionStorage.getItem('list-scroll-top');
   if (savedScroll) {
@@ -370,7 +395,11 @@ function buildCalendarHTML(): string {
 // ====================================================
 // 日记列表 HTML
 // ====================================================
-function buildEntriesHTML(entries: DiaryEntry[]): string {
+function buildEntriesHTML(entries: DiaryEntrySummary[]): string {
+  if (isEntriesLoading && currentEntries.length === 0) {
+    return buildEntriesLoadingHTML();
+  }
+
   if (currentEntries.length === 0) {
     return `
       <div class="empty-state">
@@ -401,7 +430,7 @@ function buildEntriesHTML(entries: DiaryEntry[]): string {
   }
 
   // 按日期分组
-  const groups = new Map<string, DiaryEntry[]>();
+  const groups = new Map<string, DiaryEntrySummary[]>();
   entries.forEach(e => {
     if (!groups.has(e.dateFor)) groups.set(e.dateFor, []);
     groups.get(e.dateFor)!.push(e);
@@ -423,10 +452,28 @@ function buildEntriesHTML(entries: DiaryEntry[]): string {
   }).join('');
 }
 
+function buildEntriesLoadingHTML(): string {
+  const skeletonCards = Array.from({ length: 5 }, (_, index) => `
+    <div class="entry-skeleton-card" aria-hidden="true">
+      <div class="entry-skeleton-line entry-skeleton-line-date"></div>
+      <div class="entry-skeleton-line entry-skeleton-line-title"></div>
+      <div class="entry-skeleton-line entry-skeleton-line-text"></div>
+      <div class="entry-skeleton-line entry-skeleton-line-short"></div>
+      ${index % 2 === 0 ? '<div class="entry-skeleton-image"></div>' : ''}
+    </div>
+  `).join('');
+
+  return `
+    <div class="entry-skeleton-group" aria-live="polite" aria-busy="true">
+      ${skeletonCards}
+    </div>
+  `;
+}
+
 // ====================================================
 // 筛选
 // ====================================================
-function getFilteredEntries(): DiaryEntry[] {
+function getFilteredEntries(): DiaryEntrySummary[] {
   let result = currentEntries;
 
   // 1. 左侧日期筛选
@@ -602,7 +649,7 @@ function bindPageEvents(container: HTMLElement): void {
   // 编辑分类（直接弹出分类管理模态框）
   container.querySelector('#cat-edit-btn')?.addEventListener('click', () => {
     showCategoryModal(async () => {
-      await refreshEntries();
+      await refreshEntrySummaries();
       currentEntries = getEntries();
       refreshContent(container);
       refreshCategoryPanel(container);
@@ -614,7 +661,7 @@ function bindPageEvents(container: HTMLElement): void {
 
   // 日记卡片事件
   bindCardEvents(container, async () => {
-    await refreshEntries();
+    await refreshEntrySummaries();
     currentEntries = getEntries();
     refreshContent(container);
     refreshCalendar(container);
@@ -685,7 +732,7 @@ function updateFilteredResults(container: HTMLElement): void {
     entriesWrap.querySelector('#empty-new-btn')?.addEventListener('click', () => navigate('editor'));
     // 重新绑定卡片事件
     bindCardEvents(entriesWrap as HTMLElement, async () => {
-      await refreshEntries();
+      await refreshEntrySummaries();
       currentEntries = getEntries();
       updateFilteredResults(container);
       refreshCalendar(container);
@@ -798,7 +845,7 @@ function refreshCategoryPanel(container: HTMLElement): void {
   bindCategoryEvents(container);
   container.querySelector('#cat-edit-btn')?.addEventListener('click', () => {
     showCategoryModal(async () => {
-      await refreshEntries();
+      await refreshEntrySummaries();
       currentEntries = getEntries();
       refreshContent(container);
       refreshCategoryPanel(container);

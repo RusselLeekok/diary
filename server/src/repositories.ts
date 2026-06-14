@@ -75,6 +75,35 @@ export function rowToEntry(row: EntryRow) {
   };
 }
 
+export function rowToEntrySummary(row: EntryRow) {
+  return {
+    id: row.id,
+    title: row.title,
+    plainText: row.plain_text.slice(0, 240),
+    mood: row.mood,
+    categoryId: row.category_id,
+    categoryName: row.category_name,
+    tags: row.category_name ? [row.category_name] : [],
+    wordCount: row.word_count,
+    isLocked: Boolean(row.is_locked),
+    isDeleted: Boolean(row.is_deleted),
+    dateFor: row.date_for,
+    timeFor: row.time_for ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    weather: row.weather ?? undefined,
+    location: row.location ?? undefined,
+    firstImageSrc: extractFirstImageSrc(row.content_html)
+      ? `/api/v1/entries/${encodeURIComponent(row.id)}/first-image`
+      : '',
+  };
+}
+
+export function extractFirstImageSrc(html: string): string | null {
+  const match = html.match(/<img[^>]+src=(["'])(.*?)\1/i);
+  return match?.[2] ?? null;
+}
+
 export function getCategoryIdByName(db: Database, name: string, userId = getUserId()): string | null {
   const row = db.prepare('SELECT id FROM categories WHERE user_id = ? AND name = ?')
     .get(userId, name.trim()) as { id: string } | undefined;

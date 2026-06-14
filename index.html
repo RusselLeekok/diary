@@ -7,6 +7,27 @@
     <meta name="theme-color" content="#f9f6f0" />
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📔</text></svg>" />
     <title>我的日记</title>
+    <script>
+      (() => {
+        try {
+          const themeValues = new Set(['light', 'dark', 'green', 'blue', 'pink', 'plain']);
+          const fontSizeValues = new Set(['sm', 'md', 'lg', 'xl']);
+          const theme = localStorage.getItem('diary-theme');
+          const fontSize = localStorage.getItem('diary-font-size');
+
+          if (themeValues.has(theme)) {
+            document.documentElement.dataset.theme = theme;
+            document.documentElement.classList.toggle('dark', theme === 'dark');
+          }
+
+          if (fontSizeValues.has(fontSize)) {
+            document.documentElement.dataset.fontSize = fontSize;
+          }
+        } catch {
+          // Ignore storage access errors; the app will apply defaults during bootstrap.
+        }
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
