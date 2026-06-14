@@ -1,6 +1,7 @@
 import { trashEntry } from '../services/databaseService';
-import { removeEntrySummary, refreshEntrySummaries, getFullEntryById, getAllTagsList, getEntries } from '../store/appStore';
+import { removeEntrySummary, refreshEntrySummaries, getFullEntryById, getAllTagsList } from '../store/appStore';
 import { navigate } from '../router/router';
+import { getFilteredEntries } from './listPage';
 
 let viewPageKeyDownHandler: ((e: KeyboardEvent) => void) | null = null;
 import { MOOD_CONFIG, WEATHER_CONFIG } from '../types';
@@ -55,7 +56,7 @@ export async function renderViewPage(mainEl: HTMLElement, params?: Record<string
   if (!isCurrentView(id)) return;
   if (!entry) { renderError(); return; }
 
-  const allEntries = getEntries();
+  const allEntries = getFilteredEntries();
   const currentIndex = allEntries.findIndex(e => e.id === id);
   const prevEntry = currentIndex > 0 ? allEntries[currentIndex - 1] : null;
   const nextEntry = currentIndex !== -1 && currentIndex < allEntries.length - 1 ? allEntries[currentIndex + 1] : null;

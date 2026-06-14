@@ -7,8 +7,9 @@ type RouteHandler = (params?: Record<string, string>) => void;
 const routes: Map<PageName, RouteHandler> = new Map();
 const VALID_PAGES = new Set<PageName>(['list', 'intro', 'editor', 'calendar', 'trash', 'stats', 'settings', 'view', 'login']);
 
-// 当前页面
+// 当前页面与前一页面
 let currentPage: PageName = 'list';
+let previousPage: PageName | null = null;
 
 /** 注册路由 */
 export function registerRoute(page: PageName, handler: RouteHandler): void {
@@ -47,7 +48,10 @@ export function navigate(page: PageName, params?: Record<string, string>): void 
     return;
   }
 
-  currentPage = page;
+  if (currentPage !== page) {
+    previousPage = currentPage;
+    currentPage = page;
+  }
   // 更新 hash
   const paramStr = params ? '?' + new URLSearchParams(params).toString() : '';
   const nextHash = `#/${page}${paramStr}`;
@@ -120,7 +124,10 @@ export function initRouter(): void {
     const guardedPage = checkAuthGuard(page, params);
     if (guardedPage !== page) return;
 
-    currentPage = page;
+    if (currentPage !== page) {
+      previousPage = currentPage;
+      currentPage = page;
+    }
     render(page, params);
     updateNavHighlight(page);
   });
@@ -135,6 +142,8 @@ export function initRouter(): void {
 }
 
 export function getCurrentPage(): PageName { return currentPage; }
+
+export function getPreviousPage(): PageName | null { return previousPage; }
 
 /** 更新侧边栏导航高亮 */
 function updateNavHighlight(page: PageName): void {

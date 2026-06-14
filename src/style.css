@@ -421,7 +421,7 @@ body {
 
 /* ==================== 页面容器通用卡片样式 ==================== */
 /* 各页内容充满 app-main-wrap，无需自带边框 */
-.page-list, .page-intro, .page-editor, .page-calendar, .page-search, .page-stats, .page-settings, .page-view {
+.page-list, .page-intro, .page-editor, .page-calendar, .page-search, .page-stats, .page-settings, .page-view, .page-trash {
   flex: 1;
   overflow: hidden;
   display: flex;

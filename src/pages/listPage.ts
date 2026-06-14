@@ -7,7 +7,7 @@ import {
   loadMoreEntrySummaries,
 } from '../store/appStore';
 import { renderDiaryCard, bindCardEvents } from '../components/diaryCard';
-import { navigate } from '../router/router';
+import { navigate, getPreviousPage } from '../router/router';
 import type { DiaryEntrySummary, MoodType } from '../types';
 import { MOOD_CONFIG } from '../types';
 import { buildCategoryStats, getCategoryColor } from '../utils/categoryUtils';
@@ -72,11 +72,14 @@ export async function renderListPage(mainEl: HTMLElement, params?: Record<string
   const shouldSearch = params?.search === 'true';
   const initKeyword = params?.keyword || '';
 
+  const prevPage = getPreviousPage();
+  const keepFilters = prevPage === 'view' || prevPage === 'editor';
+
   if (shouldSearch || initKeyword) {
     isFilterExpanded = true;
     searchKeyword = initKeyword;
     resetVisibleEntryCount();
-  } else {
+  } else if (!keepFilters) {
     // 正常进入时清除筛选状态
     searchKeyword = '';
     searchMood = '';
@@ -87,8 +90,10 @@ export async function renderListPage(mainEl: HTMLElement, params?: Record<string
     isHistoryTodayActive = false;
   }
 
-  selectedDate = null;
-  selectedCategory = null;
+  if (!keepFilters) {
+    selectedDate = null;
+    selectedCategory = null;
+  }
   buildPage(mainEl);
   restoreListScroll(mainEl);
 
@@ -537,8 +542,9 @@ function buildEntriesLoadingHTML(): string {
 // ====================================================
 // 筛选
 // ====================================================
-function getFilteredEntries(): DiaryEntrySummary[] {
-  let result = currentEntries;
+export function getFilteredEntries(): DiaryEntrySummary[] {
+  const baseEntries = currentEntries.length > 0 ? currentEntries : getEntries();
+  let result = baseEntries;
 
   // 1. 左侧日期筛选
   if (selectedDate) {
@@ -602,6 +608,18 @@ function getFilteredEntries(): DiaryEntrySummary[] {
   }
 
   return result;
+}
+
+export function clearListFilters(): void {
+  searchKeyword = '';
+  searchMood = '';
+  searchDateFrom = '';
+  searchDateTo = '';
+  searchTags = [];
+  isFilterExpanded = false;
+  isHistoryTodayActive = false;
+  selectedDate = null;
+  selectedCategory = null;
 }
 
 // ====================================================

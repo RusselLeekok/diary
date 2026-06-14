@@ -3,6 +3,7 @@ import type { PageName } from '../types';
 import { getAppConfig, updateConfig } from '../store/appStore';
 import { getCurrentUser, logout } from '../store/authStore';
 import { showToast } from './toast';
+import { clearListFilters } from '../pages/listPage';
 
 // 导航项配置
 const NAV_ITEMS: { page: PageName; icon: string; label: string }[] = [
@@ -113,6 +114,7 @@ export function renderTopbar(container: HTMLElement): void {
       if (page === 'list') {
         sessionStorage.removeItem('list-scroll-top');
         sessionStorage.removeItem('list-visible-entry-count');
+        clearListFilters();
       }
       navigate(page);
     });
