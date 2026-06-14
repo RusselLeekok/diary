@@ -4,6 +4,7 @@ import { formatDisplayDate, formatRelativeTime } from '../utils/dateUtils';
 import { navigate } from '../router/router';
 import { trashEntry } from '../services/databaseService';
 import { refreshEntrySummaries, getAllTagsList, removeEntrySummary } from '../store/appStore';
+import { getToken } from '../store/authStore';
 import { getCategoryColor } from '../utils/categoryUtils';
 import { showModal } from './modal';
 import { showToast } from './toast';
@@ -83,7 +84,7 @@ export function renderDiaryCard(entry: DiaryEntrySummary): string {
           </div>
         </div>
         <div class="card-image-right">
-          <img src="${escapeHtml(imgUrl)}" alt="日记配图" loading="lazy" decoding="async" />
+          ${renderCardImage(imgUrl, entry.updatedAt)}
         </div>
       </article>
     `;
@@ -119,8 +120,59 @@ export function renderDiaryCard(entry: DiaryEntrySummary): string {
   }
 }
 
+const AUTH_IMAGE_MEMORY_LIMIT = 120;
+const AUTH_IMAGE_STORAGE_LIMIT = 40;
+const AUTH_IMAGE_STORAGE_MAX_CHARS = 700_000;
+const AUTH_IMAGE_STORAGE_KEY = 'diary-card-auth-image-cache-v1';
+
+interface AuthImageMemoryItem {
+  src: string;
+  lastUsed: number;
+  promise?: Promise<string>;
+}
+
+interface AuthImageStoredItem {
+  dataUrl: string;
+  lastUsed: number;
+}
+
+const authImageMemoryCache = new Map<string, AuthImageMemoryItem>();
+let authImageStorageCache: Record<string, AuthImageStoredItem> | null = null;
+
+function renderCardImage(src: string, version?: string): string {
+  const imageSrc = withImageVersion(src, version);
+  const safeSrc = escapeHtml(imageSrc);
+  if (shouldFetchImageWithAuth(imageSrc)) {
+    const cachedSrc = getCachedAuthImageSrc(imageSrc);
+    if (cachedSrc) {
+      return `<img src="${escapeHtml(cachedSrc)}" data-auth-src="${safeSrc}" alt="日记配图" loading="lazy" decoding="async" />`;
+    }
+    return `<img data-auth-src="${safeSrc}" alt="日记配图" loading="lazy" decoding="async" />`;
+  }
+  return `<img src="${safeSrc}" alt="日记配图" loading="lazy" decoding="async" />`;
+}
+
+function shouldFetchImageWithAuth(src: string): boolean {
+  return /\/api\/v1\/entries\/[^/]+\/first-image(?:$|[?#])/i.test(src);
+}
+
+function withImageVersion(src: string, version?: string): string {
+  if (!version || !shouldFetchImageWithAuth(src)) return src;
+
+  try {
+    const url = new URL(src, window.location.origin);
+    url.searchParams.set('v', version);
+    return src.startsWith('http') ? url.href : `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    const separator = src.includes('?') ? '&' : '?';
+    return `${src}${separator}v=${encodeURIComponent(version)}`;
+  }
+}
+
 /** 绑定日记卡片事件（点击编辑、删除） */
 export function bindCardEvents(container: HTMLElement, onDelete?: (id: string) => void): void {
+  bindCardImagePreviews(container);
+
   container.querySelectorAll('.diary-card').forEach(card => {
     const id = (card as HTMLElement).dataset.id!;
 
@@ -175,4 +227,185 @@ export function bindCardEvents(container: HTMLElement, onDelete?: (id: string) =
       });
     });
   });
+}
+
+function bindCardImagePreviews(container: HTMLElement): void {
+  container.querySelectorAll<HTMLImageElement>('img[data-auth-src]').forEach(img => {
+    const src = img.dataset.authSrc;
+    if (!src) return;
+    if (img.dataset.loadingAuthImage === 'true') return;
+
+    const cachedSrc = getCachedAuthImageSrc(src);
+    if (cachedSrc) {
+      if (img.src !== cachedSrc) img.src = cachedSrc;
+      img.classList.remove('is-loading', 'is-error');
+      return;
+    }
+    if (img.src) return;
+
+    img.dataset.loadingAuthImage = 'true';
+    img.classList.add('is-loading');
+
+    getAuthorizedImagePreview(src)
+      .then(imageSrc => {
+        img.src = imageSrc;
+        img.classList.remove('is-loading');
+      })
+      .catch(error => {
+        console.warn('日记预览图加载失败:', error);
+        img.classList.remove('is-loading');
+        img.classList.add('is-error');
+        img.removeAttribute('alt');
+      })
+      .finally(() => {
+        delete img.dataset.loadingAuthImage;
+      });
+  });
+}
+
+function getCachedAuthImageSrc(src: string): string | null {
+  const memoryItem = authImageMemoryCache.get(src);
+  if (memoryItem?.src) {
+    memoryItem.lastUsed = Date.now();
+    return memoryItem.src;
+  }
+
+  const storedItem = getAuthImageStorageCache()[src];
+  if (storedItem?.dataUrl) {
+    storedItem.lastUsed = Date.now();
+    authImageMemoryCache.set(src, {
+      src: storedItem.dataUrl,
+      lastUsed: storedItem.lastUsed,
+    });
+    persistAuthImageStorageCache();
+    return storedItem.dataUrl;
+  }
+
+  return null;
+}
+
+function getAuthorizedImagePreview(src: string): Promise<string> {
+  const cachedSrc = getCachedAuthImageSrc(src);
+  if (cachedSrc) return Promise.resolve(cachedSrc);
+
+  const pending = authImageMemoryCache.get(src)?.promise;
+  if (pending) return pending;
+
+  const promise = fetchAuthorizedImage(src)
+    .then(async ({ blob, objectUrl }) => {
+      authImageMemoryCache.set(src, {
+        src: objectUrl,
+        lastUsed: Date.now(),
+      });
+      trimAuthImageMemoryCache();
+
+      if (blob.size * 1.4 <= AUTH_IMAGE_STORAGE_MAX_CHARS) {
+        try {
+          const dataUrl = await blobToDataUrl(blob);
+          rememberStoredAuthImage(src, dataUrl);
+        } catch (error) {
+          console.warn('保存日记预览图缓存失败:', error);
+        }
+      }
+
+      return objectUrl;
+    })
+    .catch(error => {
+      authImageMemoryCache.delete(src);
+      throw error;
+    });
+
+  authImageMemoryCache.set(src, {
+    src: '',
+    promise,
+    lastUsed: Date.now(),
+  });
+  return promise;
+}
+
+async function fetchAuthorizedImage(src: string): Promise<{ blob: Blob; objectUrl: string }> {
+  const headers = new Headers();
+  const token = getToken();
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  const response = await fetch(src, {
+    headers,
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    throw new Error(`图片请求失败：${response.status}`);
+  }
+
+  const blob = await response.blob();
+  return {
+    blob,
+    objectUrl: URL.createObjectURL(blob),
+  };
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener('load', () => resolve(String(reader.result ?? '')));
+    reader.addEventListener('error', () => reject(reader.error ?? new Error('Failed to read image blob')));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function getAuthImageStorageCache(): Record<string, AuthImageStoredItem> {
+  if (authImageStorageCache) return authImageStorageCache;
+
+  try {
+    const raw = sessionStorage.getItem(AUTH_IMAGE_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    authImageStorageCache = parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    authImageStorageCache = {};
+  }
+
+  return authImageStorageCache ?? {};
+}
+
+function rememberStoredAuthImage(src: string, dataUrl: string): void {
+  const cache = getAuthImageStorageCache();
+  cache[src] = { dataUrl, lastUsed: Date.now() };
+
+  const entries = Object.entries(cache)
+    .sort(([, a], [, b]) => b.lastUsed - a.lastUsed);
+  for (const [key] of entries.slice(AUTH_IMAGE_STORAGE_LIMIT)) {
+    delete cache[key];
+  }
+
+  persistAuthImageStorageCache();
+}
+
+function persistAuthImageStorageCache(): void {
+  if (!authImageStorageCache) return;
+
+  try {
+    sessionStorage.setItem(AUTH_IMAGE_STORAGE_KEY, JSON.stringify(authImageStorageCache));
+  } catch {
+    const entries = Object.entries(authImageStorageCache)
+      .sort(([, a], [, b]) => b.lastUsed - a.lastUsed);
+    authImageStorageCache = Object.fromEntries(entries.slice(0, Math.max(8, Math.floor(entries.length / 2))));
+    try {
+      sessionStorage.setItem(AUTH_IMAGE_STORAGE_KEY, JSON.stringify(authImageStorageCache));
+    } catch {
+      sessionStorage.removeItem(AUTH_IMAGE_STORAGE_KEY);
+      authImageStorageCache = {};
+    }
+  }
+}
+
+function trimAuthImageMemoryCache(): void {
+  if (authImageMemoryCache.size <= AUTH_IMAGE_MEMORY_LIMIT) return;
+
+  const entries = Array.from(authImageMemoryCache.entries())
+    .sort(([, a], [, b]) => a.lastUsed - b.lastUsed);
+  for (const [key, item] of entries.slice(0, authImageMemoryCache.size - AUTH_IMAGE_MEMORY_LIMIT)) {
+    if (item.src.startsWith('blob:')) URL.revokeObjectURL(item.src);
+    authImageMemoryCache.delete(key);
+  }
 }

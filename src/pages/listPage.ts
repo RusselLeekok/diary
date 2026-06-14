@@ -67,6 +67,8 @@ export async function renderListPage(mainEl: HTMLElement, params?: Record<string
   isEntriesLoading = !hadCache;
   currentEntries = getEntries();
   visibleEntryCount = getSavedVisibleEntryCount();
+  const entriesBeforeRefresh = currentEntries.map(entry => ({ ...entry }));
+  const hadMoreBeforeRefresh = hasMoreEntrySummaries();
 
   // 解析是否需要调起搜索
   const shouldSearch = params?.search === 'true';
@@ -112,11 +114,17 @@ export async function renderListPage(mainEl: HTMLElement, params?: Record<string
     if (!pageListEl) return;
 
     isEntriesLoading = false;
-    currentEntries = getEntries();
+    const refreshedEntries = getEntries();
+    const shouldUpdateList =
+      !areEntrySummariesVisuallySame(entriesBeforeRefresh, refreshedEntries) ||
+      hadMoreBeforeRefresh !== hasMoreEntrySummaries();
+    currentEntries = refreshedEntries;
     if (hadCache) {
-      refreshContent(mainEl);
-      refreshCalendar(mainEl);
-      refreshCategoryPanel(mainEl);
+      if (shouldUpdateList) {
+        refreshContent(mainEl);
+        refreshCalendar(mainEl);
+        refreshCategoryPanel(mainEl);
+      }
     } else {
       buildPage(mainEl);
       restoreListScroll(mainEl);
@@ -163,6 +171,33 @@ function persistVisibleEntryCount(): void {
 function resetVisibleEntryCount(): void {
   visibleEntryCount = ENTRY_RENDER_BATCH_SIZE;
   sessionStorage.removeItem(LIST_VISIBLE_COUNT_KEY);
+}
+
+function areEntrySummariesVisuallySame(a: DiaryEntrySummary[], b: DiaryEntrySummary[]): boolean {
+  if (a.length !== b.length) return false;
+
+  for (let index = 0; index < a.length; index += 1) {
+    if (!isEntrySummaryVisuallySame(a[index], b[index])) return false;
+  }
+
+  return true;
+}
+
+function isEntrySummaryVisuallySame(a: DiaryEntrySummary, b: DiaryEntrySummary): boolean {
+  return a.id === b.id &&
+    a.title === b.title &&
+    a.plainText === b.plainText &&
+    a.mood === b.mood &&
+    a.wordCount === b.wordCount &&
+    a.isLocked === b.isLocked &&
+    a.isDeleted === b.isDeleted &&
+    a.updatedAt === b.updatedAt &&
+    a.dateFor === b.dateFor &&
+    a.timeFor === b.timeFor &&
+    a.weather === b.weather &&
+    a.location === b.location &&
+    a.firstImageSrc === b.firstImageSrc &&
+    a.tags.join('\u0000') === b.tags.join('\u0000');
 }
 
 // ====================================================

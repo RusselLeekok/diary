@@ -123,25 +123,7 @@ export async function updateConfig(key: keyof AppConfig, value: unknown): Promis
 /** 重新从 DB 刷新日记列表 */
 export async function refreshEntries(): Promise<DiaryEntry[]> {
   const fullEntries = await getAllEntries();
-  state.allEntries = fullEntries.map(entry => ({
-    id: entry.id,
-    title: entry.title,
-    plainText: entry.plainText.slice(0, 240),
-    mood: entry.mood,
-    tags: entry.tags,
-    wordCount: entry.wordCount,
-    isLocked: entry.isLocked,
-    isDeleted: entry.isDeleted,
-    createdAt: entry.createdAt,
-    updatedAt: entry.updatedAt,
-    dateFor: entry.dateFor,
-    timeFor: entry.timeFor,
-    weather: entry.weather,
-    location: entry.location,
-    firstImageSrc: extractFirstImageSrc(entry.content)
-      ? `/api/v1/entries/${encodeURIComponent(entry.id)}/first-image`
-      : '',
-  }));
+  state.allEntries = mergeRefreshedEntrySummaries(fullEntries.map(diaryEntryToSummary), false);
   state.fullEntryCache.clear();
   fullEntries.forEach(entry => state.fullEntryCache.set(entry.id, entry));
   state.entrySummariesLoaded = true;
@@ -155,7 +137,7 @@ export async function refreshEntrySummaries(): Promise<DiaryEntrySummary[]> {
 
   entrySummaryRefreshPromise = getEntrySummaryPage({ offset: 0, limit: ENTRY_SUMMARY_PAGE_SIZE })
     .then(page => {
-      state.allEntries = page.entries;
+      state.allEntries = mergeRefreshedEntrySummaries(page.entries);
       state.entrySummariesLoaded = true;
       state.entrySummariesHasMore = page.hasMore;
       state.entrySummariesNextOffset = page.nextOffset;
@@ -229,7 +211,41 @@ export function invalidateEntryCache(id?: string): void {
   else state.fullEntryCache.clear();
 }
 
+function mergeRefreshedEntrySummaries(nextEntries: DiaryEntrySummary[], keepRecentLocal = true): DiaryEntrySummary[] {
+  const previousEntries = state.allEntries;
+  const previousById = new Map(previousEntries.map(entry => [entry.id, entry]));
+  const merged = nextEntries.map(entry => mergeEntrySummaryPreview(entry, previousById.get(entry.id)));
+  const mergedIds = new Set(merged.map(entry => entry.id));
+
+  if (keepRecentLocal) {
+    previousEntries.forEach(entry => {
+      if (!mergedIds.has(entry.id) && isRecentLocalSummary(entry)) {
+        merged.push(entry);
+        mergedIds.add(entry.id);
+      }
+    });
+  }
+
+  return merged.sort(compareEntrySummaries);
+}
+
+function mergeEntrySummaryPreview(next: DiaryEntrySummary, previous?: DiaryEntrySummary): DiaryEntrySummary {
+  if (!previous?.firstImageSrc || !next.firstImageSrc) return next;
+  if (!previous.firstImageSrc.startsWith('data:')) return next;
+  if (!isServerFirstImageSrc(next.firstImageSrc)) return next;
+  return {
+    ...next,
+    firstImageSrc: previous.firstImageSrc,
+  };
+}
+
+function isRecentLocalSummary(entry: DiaryEntrySummary): boolean {
+  const updatedAt = Date.parse(entry.updatedAt);
+  return Number.isFinite(updatedAt) && Date.now() - updatedAt < 90_000;
+}
+
 function diaryEntryToSummary(entry: DiaryEntry): DiaryEntrySummary {
+  const firstImageSrc = extractFirstImageSrc(entry.content);
   return {
     id: entry.id,
     title: entry.title,
@@ -245,10 +261,21 @@ function diaryEntryToSummary(entry: DiaryEntry): DiaryEntrySummary {
     timeFor: entry.timeFor,
     weather: entry.weather,
     location: entry.location,
-    firstImageSrc: extractFirstImageSrc(entry.content)
-      ? `/api/v1/entries/${encodeURIComponent(entry.id)}/first-image`
+    firstImageSrc: firstImageSrc
+      ? getOptimisticFirstImageSrc(entry.id, firstImageSrc)
       : '',
   };
+}
+
+function getOptimisticFirstImageSrc(entryId: string, src: string): string {
+  if (src.startsWith('data:') || /^https?:\/\//i.test(src) || src.startsWith('/')) {
+    return src;
+  }
+  return `/api/v1/entries/${encodeURIComponent(entryId)}/first-image`;
+}
+
+function isServerFirstImageSrc(src: string): boolean {
+  return /\/api\/v1\/entries\/[^/]+\/first-image(?:$|[?#])/i.test(src);
 }
 
 function compareEntrySummaries(a: DiaryEntrySummary, b: DiaryEntrySummary): number {
@@ -296,7 +323,10 @@ function persistEntrySummariesCache(): void {
   if (typeof sessionStorage === 'undefined') return;
 
   try {
-    sessionStorage.setItem(ENTRY_SUMMARIES_CACHE_KEY, JSON.stringify(state.allEntries));
+    sessionStorage.setItem(ENTRY_SUMMARIES_CACHE_KEY, JSON.stringify(state.allEntries.map(entry => ({
+      ...entry,
+      firstImageSrc: entry.firstImageSrc?.startsWith('data:') ? '' : entry.firstImageSrc,
+    }))));
   } catch (error) {
     console.warn('保存日记摘要缓存失败:', error);
   }
