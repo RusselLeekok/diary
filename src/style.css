@@ -884,6 +884,12 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+.diary-card.is-removing,
+.trash-card.is-removing {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.985);
+  pointer-events: none;
+}
 
 .card-header {
   display: flex;

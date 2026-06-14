@@ -1,5 +1,5 @@
 import { getTrashedEntries, restoreEntry, deleteEntry, clearTrash } from '../services/databaseService';
-import { refreshEntrySummaries } from '../store/appStore';
+import { refreshEntrySummaries, removeEntrySummary, upsertEntrySummary } from '../store/appStore';
 import { navigate } from '../router/router';
 import { MOOD_CONFIG } from '../types';
 import type { DiaryEntry } from '../types';
@@ -64,7 +64,7 @@ function buildPage(mainEl: HTMLElement, trashed: DiaryEntry[]): void {
     </div>
   `;
 
-  bindPageEvents(mainEl);
+  bindPageEvents(mainEl, trashed);
 }
 
 /**
@@ -113,7 +113,7 @@ function renderTrashCard(entry: DiaryEntry): string {
 /**
  * 绑定按钮点击事件
  */
-function bindPageEvents(container: HTMLElement): void {
+function bindPageEvents(container: HTMLElement, trashed: DiaryEntry[]): void {
   // 返回列表按钮
   container.querySelector('#trash-back-list')?.addEventListener('click', () => {
     navigate('list');
@@ -126,11 +126,15 @@ function bindPageEvents(container: HTMLElement): void {
       content: '确定要清空垃圾箱吗？其中所有的日记都将被**物理永久删除**，此操作**不可撤销且无法恢复**！',
       confirmText: '永久清空',
       confirmClass: 'btn-danger',
-      onConfirm: async () => {
-        await clearTrash();
-        await refreshEntrySummaries();
-        showToast('垃圾箱已彻底清空', { type: 'success' });
+      onConfirm: () => {
         buildPage(container, []);
+        showToast('垃圾箱已彻底清空', { type: 'success' });
+        void clearTrash().catch(async error => {
+          console.error('清空垃圾箱失败:', error);
+          showToast(error instanceof Error ? error.message : '清空失败，请稍后再试', { type: 'error' });
+          const updated = await getTrashedEntries();
+          buildPage(container, updated);
+        });
       }
     });
   });
@@ -142,12 +146,21 @@ function bindPageEvents(container: HTMLElement): void {
     // 恢复日记
     card.querySelector('.trash-btn-restore')?.addEventListener('click', async (e) => {
       e.stopPropagation();
-      await restoreEntry(id);
-      await refreshEntrySummaries();
+      const entry = trashed.find(item => item.id === id);
+      if (entry) {
+        upsertEntrySummary({ ...entry, isDeleted: false, updatedAt: new Date().toISOString() });
+      }
+      removeTrashCard(container, id, trashed);
       showToast('日记已恢复 ✓', { type: 'success' });
-      // 局部刷新
-      const updated = await getTrashedEntries();
-      buildPage(container, updated);
+      void restoreEntry(id)
+        .then(() => refreshEntrySummaries())
+        .catch(async error => {
+          console.error('恢复日记失败:', error);
+          showToast(error instanceof Error ? error.message : '恢复失败，请稍后再试', { type: 'error' });
+          await refreshEntrySummaries();
+          const updated = await getTrashedEntries();
+          buildPage(container, updated);
+        });
     });
 
     // 彻底删除
@@ -158,14 +171,28 @@ function bindPageEvents(container: HTMLElement): void {
         content: '确定要彻底删除这篇日记吗？此操作会将数据从本地存储中彻底抹除，**无法再次找回**。',
         confirmText: '永久删除',
         confirmClass: 'btn-danger',
-        onConfirm: async () => {
-          await deleteEntry(id);
-          await refreshEntrySummaries();
+        onConfirm: () => {
+          removeEntrySummary(id);
+          removeTrashCard(container, id, trashed);
           showToast('日记已永久删除', { type: 'success' });
-          const updated = await getTrashedEntries();
-          buildPage(container, updated);
+          void deleteEntry(id).catch(async error => {
+            console.error('永久删除失败:', error);
+            showToast(error instanceof Error ? error.message : '删除失败，请稍后再试', { type: 'error' });
+            await refreshEntrySummaries();
+            const updated = await getTrashedEntries();
+            buildPage(container, updated);
+          });
         }
       });
     });
   });
+}
+
+function removeTrashCard(container: HTMLElement, id: string, trashed: DiaryEntry[]): void {
+  const card = Array.from(container.querySelectorAll('.trash-card'))
+    .find(item => (item as HTMLElement).dataset.id === id) as HTMLElement | undefined;
+  card?.classList.add('is-removing');
+  window.setTimeout(() => {
+    buildPage(container, trashed.filter(entry => entry.id !== id));
+  }, 160);
 }

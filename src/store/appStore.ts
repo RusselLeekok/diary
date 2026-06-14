@@ -203,9 +203,58 @@ export function cacheFullEntry(entry: DiaryEntry): void {
   state.fullEntryCache.set(entry.id, entry);
 }
 
+export function upsertEntrySummary(entry: DiaryEntry): void {
+  const summary = diaryEntryToSummary(entry);
+  const existingIndex = state.allEntries.findIndex(item => item.id === summary.id);
+  if (existingIndex >= 0) {
+    state.allEntries[existingIndex] = summary;
+  } else {
+    state.allEntries.unshift(summary);
+  }
+  state.allEntries.sort(compareEntrySummaries);
+  state.entrySummariesLoaded = true;
+  refreshTags();
+  persistEntrySummariesCache();
+}
+
+export function removeEntrySummary(id: string): void {
+  state.allEntries = state.allEntries.filter(entry => entry.id !== id);
+  state.fullEntryCache.delete(id);
+  refreshTags();
+  persistEntrySummariesCache();
+}
+
 export function invalidateEntryCache(id?: string): void {
   if (id) state.fullEntryCache.delete(id);
   else state.fullEntryCache.clear();
+}
+
+function diaryEntryToSummary(entry: DiaryEntry): DiaryEntrySummary {
+  return {
+    id: entry.id,
+    title: entry.title,
+    plainText: entry.plainText.slice(0, 240),
+    mood: entry.mood,
+    tags: entry.tags,
+    wordCount: entry.wordCount,
+    isLocked: entry.isLocked,
+    isDeleted: entry.isDeleted,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+    dateFor: entry.dateFor,
+    timeFor: entry.timeFor,
+    weather: entry.weather,
+    location: entry.location,
+    firstImageSrc: extractFirstImageSrc(entry.content)
+      ? `/api/v1/entries/${encodeURIComponent(entry.id)}/first-image`
+      : '',
+  };
+}
+
+function compareEntrySummaries(a: DiaryEntrySummary, b: DiaryEntrySummary): number {
+  const aKey = `${a.dateFor} ${a.timeFor ?? ''} ${a.updatedAt}`;
+  const bKey = `${b.dateFor} ${b.timeFor ?? ''} ${b.updatedAt}`;
+  return bKey.localeCompare(aKey);
 }
 
 function refreshTags(): void {

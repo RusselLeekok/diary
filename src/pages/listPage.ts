@@ -720,8 +720,7 @@ function bindPageEvents(container: HTMLElement): void {
   bindCalendarEvents(container);
 
   // 日记卡片事件
-  bindCardEvents(container, async () => {
-    await refreshEntrySummaries();
+  bindCardEvents(container, () => {
     currentEntries = getEntries();
     refreshContent(container);
     refreshCalendar(container);
@@ -795,8 +794,7 @@ function updateFilteredResults(container: HTMLElement): void {
     entriesWrap.querySelector('#empty-new-btn')?.addEventListener('click', () => navigate('editor'));
     bindLoadMoreEvent(container);
     // 重新绑定卡片事件
-    bindCardEvents(entriesWrap as HTMLElement, async () => {
-      await refreshEntrySummaries();
+    bindCardEvents(entriesWrap as HTMLElement, () => {
       currentEntries = getEntries();
       updateFilteredResults(container);
       refreshCalendar(container);

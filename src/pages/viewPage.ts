@@ -1,5 +1,5 @@
 import { trashEntry } from '../services/databaseService';
-import { refreshEntrySummaries, getFullEntryById, getAllTagsList, getEntries } from '../store/appStore';
+import { removeEntrySummary, refreshEntrySummaries, getFullEntryById, getAllTagsList, getEntries } from '../store/appStore';
 import { navigate } from '../router/router';
 
 let viewPageKeyDownHandler: ((e: KeyboardEvent) => void) | null = null;
@@ -209,12 +209,16 @@ export async function renderViewPage(mainEl: HTMLElement, params?: Record<string
       content: '确定要将这篇日记移入垃圾箱吗？您可以在垃圾箱中找回它。',
       confirmText: '移入垃圾箱',
       confirmClass: 'btn-danger',
-      onConfirm: async () => {
+      onConfirm: () => {
         cleanup();
-        await trashEntry(id);
-        await refreshEntrySummaries();
+        removeEntrySummary(id);
         showToast('日记已移入垃圾箱 ✓', { type: 'success' });
         navigate('list');
+        void trashEntry(id).catch(async error => {
+          console.error('移入垃圾箱失败:', error);
+          showToast(error instanceof Error ? error.message : '删除失败，请稍后再试', { type: 'error' });
+          await refreshEntrySummaries();
+        });
       },
     });
   });

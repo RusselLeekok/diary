@@ -3,7 +3,7 @@ import { MOOD_CONFIG, WEATHER_CONFIG } from '../types';
 import { formatDisplayDate, formatRelativeTime } from '../utils/dateUtils';
 import { navigate } from '../router/router';
 import { trashEntry } from '../services/databaseService';
-import { refreshEntrySummaries, getAllTagsList } from '../store/appStore';
+import { refreshEntrySummaries, getAllTagsList, removeEntrySummary } from '../store/appStore';
 import { getCategoryColor } from '../utils/categoryUtils';
 import { showModal } from './modal';
 import { showToast } from './toast';
@@ -120,7 +120,7 @@ export function renderDiaryCard(entry: DiaryEntrySummary): string {
 }
 
 /** 绑定日记卡片事件（点击编辑、删除） */
-export function bindCardEvents(container: HTMLElement, onDelete?: () => void): void {
+export function bindCardEvents(container: HTMLElement, onDelete?: (id: string) => void): void {
   container.querySelectorAll('.diary-card').forEach(card => {
     const id = (card as HTMLElement).dataset.id!;
 
@@ -159,11 +159,18 @@ export function bindCardEvents(container: HTMLElement, onDelete?: () => void): v
         content: '确定要将这篇日记移入垃圾箱吗？您可以在垃圾箱中找回它。',
         confirmText: '移入垃圾箱',
         confirmClass: 'btn-danger',
-        onConfirm: async () => {
-          await trashEntry(id);
-          if (!onDelete) await refreshEntrySummaries();
+        onConfirm: () => {
+          const card = (btn as HTMLElement).closest('.diary-card') as HTMLElement | null;
+          card?.classList.add('is-removing');
+          removeEntrySummary(id);
+          window.setTimeout(() => onDelete?.(id), 160);
           showToast('日记已移入垃圾箱', { type: 'success' });
-          onDelete?.();
+          void trashEntry(id).catch(async error => {
+            console.error('移入垃圾箱失败:', error);
+            showToast(error instanceof Error ? error.message : '删除失败，请稍后再试', { type: 'error' });
+            await refreshEntrySummaries();
+            onDelete?.(id);
+          });
         },
       });
     });

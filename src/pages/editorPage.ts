@@ -2,7 +2,7 @@ import Quill from 'quill';
 import type { DiaryEntry, MoodType, WeatherType } from '../types';
 import { MOOD_CONFIG, WEATHER_CONFIG } from '../types';
 import { saveEntry } from '../services/databaseService';
-import { cacheFullEntry, getFullEntryById, refreshEntrySummaries, getAllTagsList, getEntries, addCategory } from '../store/appStore';
+import { cacheFullEntry, getFullEntryById, refreshEntrySummaries, getAllTagsList, getEntries, addCategory, upsertEntrySummary } from '../store/appStore';
 import { navigate } from '../router/router';
 import { showCategoryModal } from '../components/categoryModal';
 import { showToast } from '../components/toast';
@@ -362,7 +362,7 @@ function bindEditorEvents(
   });
 
   // --------- 保存函数 ---------
-  async function doSave(showIndicator: boolean = false): Promise<DiaryEntry | null> {
+  async function doSave(showIndicator: boolean = false, waitForRemote: boolean = true): Promise<DiaryEntry | null> {
     if (!quill || !dtPicker) return null;
     if (formatPreviewState && !formatPreviewState.committed) return null;
     // 若编辑器容器已不在 DOM 中（页面已切换），自动清除定时器并跳过保存
@@ -399,10 +399,18 @@ function bindEditorEvents(
       weather: selectedWeather,
       location: selectedLocation,
     };
-    await saveEntry(entry);
     cacheFullEntry(entry);
-    await refreshEntrySummaries();
+    upsertEntrySummary(entry);
     savedEntry = entry;
+    const persist = saveEntry(entry);
+    if (waitForRemote) {
+      await persist;
+    } else {
+      void persist.catch(error => {
+        console.error('后台保存失败:', error);
+        showToast(getSaveErrorMessage(error), { type: 'error' });
+      });
+    }
     if (showIndicator) {
       showAutoSaveIndicator();
     }
@@ -720,7 +728,7 @@ function bindEditorEvents(
 
   container.querySelector('#save-btn')!.addEventListener('click', async () => {
     try {
-      const entry = await doSave(false); // 保存日记但不要显示小气泡提示，因为马上要全局提示和跳转了
+      const entry = await doSave(false, false); // 先更新本地并跳转，远端保存后台完成
       if (!entry) {
         showToast('请先输入标题、正文或插入图片', { type: 'warning' });
         return;
