@@ -44,30 +44,36 @@ const importSchema = z.object({
 }).passthrough();
 
 export async function registerImportExportRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/api/v1/export/json', async () => {
-    const entries = getAllEntries(app);
-    const categories = getAllCategories(app);
+  app.get('/api/v1/export/json', async (request) => {
+    const userId = request.userId!;
+    const entries = getAllEntries(app, userId);
+    const categories = getAllCategories(app, userId);
     const settings = app.db.prepare(`
       SELECT theme, font_size, auto_save_interval
       FROM settings
       WHERE user_id = ?
-    `).get(getUserId()) as { theme: string; font_size: string; auto_save_interval: number };
+    `).get(userId) as { theme: string; font_size: string; auto_save_interval: number } | undefined;
+
+    const configTheme = settings?.theme ?? 'light';
+    const configFontSize = settings?.font_size ?? 'md';
+    const configAutoSave = settings?.auto_save_interval ?? 30;
 
     return {
       entries,
       categories,
       config: {
-        theme: settings.theme,
-        fontSize: settings.font_size,
-        autoSaveInterval: settings.auto_save_interval,
+        theme: configTheme,
+        fontSize: configFontSize,
+        autoSaveInterval: configAutoSave,
         categories: categories.map(category => category.name),
       },
       exportedAt: nowIso(),
     };
   });
 
-  app.get('/api/v1/export/markdown', async (_request, reply) => {
-    const entries = getAllEntries(app);
+  app.get('/api/v1/export/markdown', async (request, reply) => {
+    const userId = request.userId!;
+    const entries = getAllEntries(app, userId);
     const lines: string[] = [];
     for (const entry of entries) {
       lines.push(`# ${entry.title || '无标题'}`);
@@ -88,6 +94,7 @@ export async function registerImportExportRoutes(app: FastifyInstance): Promise<
 
   app.post('/api/v1/import/json', async (request) => {
     const body = importSchema.parse(request.body);
+    const userId = request.userId!;
     const now = nowIso();
     let count = 0;
 
@@ -102,36 +109,41 @@ export async function registerImportExportRoutes(app: FastifyInstance): Promise<
           .map(name => name.trim())
           .filter(Boolean)
           .forEach((name, index) => {
-            insertCategory.run(`cat_import_${slug(name)}`, getUserId(), name, index, now, now);
+            insertCategory.run(`cat_${userId}_${slug(name)}`, userId, name, index, now, now);
           });
       }
 
       if (body.config?.theme || body.config?.fontSize || body.config?.autoSaveInterval) {
         const current = app.db.prepare('SELECT theme, font_size, auto_save_interval FROM settings WHERE user_id = ?')
-          .get(getUserId()) as { theme: string; font_size: string; auto_save_interval: number };
+          .get(userId) as { theme: string; font_size: string; auto_save_interval: number } | undefined;
+        
+        const currentTheme = current?.theme ?? 'light';
+        const currentFontSize = current?.font_size ?? 'md';
+        const currentAutoSave = current?.auto_save_interval ?? 30;
+
         app.db.prepare(`
           UPDATE settings
           SET theme = ?, font_size = ?, auto_save_interval = ?, updated_at = ?
           WHERE user_id = ?
         `).run(
-          body.config.theme ?? current.theme,
-          body.config.fontSize ?? current.font_size,
-          body.config.autoSaveInterval ?? current.auto_save_interval,
+          body.config.theme ?? currentTheme,
+          body.config.fontSize ?? currentFontSize,
+          body.config.autoSaveInterval ?? currentAutoSave,
           now,
-          getUserId(),
+          userId,
         );
       }
 
       for (const raw of body.entries) {
         const tags = raw.tags?.map(tag => tag.trim()).filter(Boolean) ?? [];
         for (const tag of tags) {
-          ensureCategory(app, tag);
+          ensureCategory(app, tag, userId);
         }
 
         const payload: EntryPayload = {
           ...raw,
           mood: isKnownMood(raw.mood) ? raw.mood : 'none',
-          categoryId: raw.categoryId ?? (tags[0] ? getCategoryIdByName(app.db, tags[0]) : null),
+          categoryId: raw.categoryId ?? (tags[0] ? getCategoryIdByName(app.db, tags[0], userId) : null),
           dateFor: raw.dateFor && /^\d{4}-\d{2}-\d{2}$/.test(raw.dateFor) ? raw.dateFor : toLocalDateString(new Date()),
           timeFor: raw.timeFor && /^\d{2}:\d{2}$/.test(raw.timeFor) ? raw.timeFor : null,
         };
@@ -139,6 +151,7 @@ export async function registerImportExportRoutes(app: FastifyInstance): Promise<
           app.db,
           payload,
           raw.id ? { id: raw.id, created_at: raw.createdAt ?? now } : undefined,
+          userId,
         );
         upsertEntry(app.db, normalized);
         count++;
@@ -154,33 +167,33 @@ export async function registerImportExportRoutes(app: FastifyInstance): Promise<
   });
 }
 
-function getAllEntries(app: FastifyInstance) {
+function getAllEntries(app: FastifyInstance, userId: string) {
   const rows = app.db.prepare(`
     SELECT e.*, c.name AS category_name
     FROM entries e
     LEFT JOIN categories c ON c.id = e.category_id
     WHERE e.user_id = ? AND e.is_deleted = 0
     ORDER BY e.date_for DESC, e.time_for DESC, e.updated_at DESC
-  `).all(getUserId()) as unknown as EntryRow[];
+  `).all(userId) as unknown as EntryRow[];
   return rows.map(rowToEntry);
 }
 
-function getAllCategories(app: FastifyInstance) {
+function getAllCategories(app: FastifyInstance, userId: string) {
   return app.db.prepare(`
     SELECT id, name, sort_order AS sortOrder, created_at AS createdAt, updated_at AS updatedAt
     FROM categories
     WHERE user_id = ?
     ORDER BY sort_order ASC, name ASC
-  `).all(getUserId());
+  `).all(userId) as Array<{ id: string; name: string; sortOrder: number; createdAt: string; updatedAt: string }>;
 }
 
-function ensureCategory(app: FastifyInstance, name: string): void {
-  if (getCategoryIdByName(app.db, name)) return;
+function ensureCategory(app: FastifyInstance, name: string, userId: string): void {
+  if (getCategoryIdByName(app.db, name, userId)) return;
   const now = nowIso();
   app.db.prepare(`
     INSERT OR IGNORE INTO categories (id, user_id, name, sort_order, created_at, updated_at)
     VALUES (?, ?, ?, (SELECT COUNT(*) FROM categories WHERE user_id = ?), ?, ?)
-  `).run(`cat_import_${slug(name)}`, getUserId(), name, getUserId(), now, now);
+  `).run(`cat_${userId}_${slug(name)}`, userId, name, userId, now, now);
 }
 
 function slug(value: string): string {

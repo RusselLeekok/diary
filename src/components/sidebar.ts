@@ -1,6 +1,7 @@
 import { getCurrentPage, navigate } from '../router/router';
 import type { PageName } from '../types';
 import { getAppConfig, updateConfig } from '../store/appStore';
+import { getCurrentUser, logout } from '../store/authStore';
 import { showToast } from './toast';
 
 // 导航项配置
@@ -16,7 +17,6 @@ const NAV_ITEMS: { page: PageName; icon: string; label: string }[] = [
     </svg>`,
     label: '日记',
   },
-
   {
     page: 'trash',
     icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -38,7 +38,7 @@ const NAV_ITEMS: { page: PageName; icon: string; label: string }[] = [
     page: 'settings',
     icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="3"/>
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.85a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.85a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33 1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.85a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82 1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.85a1.65 1.65 0 0 0-1.51 1z"/>
     </svg>`,
     label: '设置',
   },
@@ -49,6 +49,26 @@ export function renderTopbar(container: HTMLElement): void {
   const isDark = getAppConfig().theme === 'dark' ||
     document.documentElement.classList.contains('dark');
   const activePage = getCurrentPage();
+  const user = getCurrentUser();
+
+  const userHtml = user
+    ? `
+      <div class="topbar-user-menu" id="topbar-user-menu">
+        <button class="topbar-user-btn" aria-label="用户菜单" aria-haspopup="true">
+          <div class="user-avatar">${(user.displayName || user.username || 'U').charAt(0).toUpperCase()}</div>
+          <span class="user-name">${user.displayName || user.username}</span>
+        </button>
+        <div class="user-dropdown-menu" role="menu">
+          <button class="user-dropdown-item" id="user-menu-settings">
+            ⚙️ 账户设置
+          </button>
+          <button class="user-dropdown-item dropdown-danger" id="user-menu-logout">
+            🚪 退出登录
+          </button>
+        </div>
+      </div>
+    `
+    : '';
 
   container.innerHTML = `
     <header class="app-topbar" role="banner">
@@ -70,6 +90,7 @@ export function renderTopbar(container: HTMLElement): void {
 
       <!-- 右侧操作区 -->
       <div class="topbar-actions">
+        ${userHtml}
         <button class="theme-toggle-btn" id="theme-toggle" title="切换主题" aria-label="切换深色/浅色主题">
           <span id="theme-icon">${isDark ? '☀️' : '🌙'}</span>
         </button>
@@ -90,6 +111,7 @@ export function renderTopbar(container: HTMLElement): void {
       const page = (btn as HTMLElement).dataset.page as PageName;
       if (page === 'list') {
         sessionStorage.removeItem('list-scroll-top');
+        sessionStorage.removeItem('list-visible-entry-count');
       }
       navigate(page);
     });
@@ -104,6 +126,38 @@ export function renderTopbar(container: HTMLElement): void {
   container.querySelector('#theme-toggle')!.addEventListener('click', () => {
     toggleTheme();
   });
+
+  // 用户菜单交互
+  const userMenu = container.querySelector('#topbar-user-menu');
+  const userBtn = container.querySelector('.topbar-user-btn');
+  if (userMenu && userBtn) {
+    userBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      userMenu.classList.toggle('active');
+    });
+
+    document.addEventListener('click', () => {
+      userMenu.classList.remove('active');
+    });
+  }
+
+  // 账户安全跳转
+  const btnSettings = container.querySelector('#user-menu-settings');
+  if (btnSettings) {
+    btnSettings.addEventListener('click', () => {
+      navigate('settings');
+    });
+  }
+
+  // 退出登录
+  const btnLogout = container.querySelector('#user-menu-logout');
+  if (btnLogout) {
+    btnLogout.addEventListener('click', () => {
+      if (confirm('确认要退出登录吗？')) {
+        logout();
+      }
+    });
+  }
 }
 
 /** 切换主题 */

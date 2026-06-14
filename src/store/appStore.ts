@@ -3,9 +3,10 @@ import { DEFAULT_CONFIG } from '../types';
 import {
   createCategory,
   deleteCategoryByName,
+  ENTRY_SUMMARY_PAGE_SIZE,
   getAllEntries,
   getEntryById,
-  getEntrySummaries,
+  getEntrySummaryPage,
   getConfig,
   renameCategoryByName,
   setConfigItem,
@@ -18,6 +19,8 @@ interface AppState {
   allEntries: DiaryEntrySummary[];
   fullEntryCache: Map<string, DiaryEntry>;
   entrySummariesLoaded: boolean;
+  entrySummariesHasMore: boolean;
+  entrySummariesNextOffset: number;
   currentEditId: string | null;    // 当前正在编辑的日记 ID（null = 新建）
   isUnlocked: boolean;             // 应用是否已解锁
   allTags: string[];               // 所有已使用的标签
@@ -28,6 +31,8 @@ const state: AppState = {
   allEntries: [],
   fullEntryCache: new Map(),
   entrySummariesLoaded: false,
+  entrySummariesHasMore: false,
+  entrySummariesNextOffset: 0,
   currentEditId: null,
   isUnlocked: false,
   allTags: [],
@@ -43,20 +48,47 @@ export async function initStore(): Promise<void> {
   hydrateEntrySummariesCache();
   refreshTags();
 
-  state.config = await getConfig();
-  if (!state.config.categories) {
-    state.config.categories = ['生活', '工作', '心情', '随笔'];
-    await setConfigItem('categories', state.config.categories);
+  const token = localStorage.getItem('diary-token');
+  if (token) {
+    try {
+      state.config = await getConfig();
+      if (!state.config.categories) {
+        state.config.categories = ['生活', '工作', '心情', '随笔'];
+        await setConfigItem('categories', state.config.categories);
+      }
+      refreshTags();
+      void refreshEntrySummaries().catch(error => {
+        console.error('初始化日记摘要失败:', error);
+      });
+    } catch (error) {
+      console.warn('获取配置失败 (凭证失效，等待 auth 拦截):', error);
+      state.config = { ...DEFAULT_CONFIG };
+    }
+  } else {
+    state.config = { ...DEFAULT_CONFIG };
   }
-  // 合并配置中的分类以及日记中已经使用的标签并去重
-  refreshTags();
-  refreshTags();
-  void refreshEntrySummaries().catch(error => {
-    console.error('初始化日记摘要失败:', error);
-  });
+
   // 如果没有密码则直接解锁
   if (!state.config.hasPassword) {
     state.isUnlocked = true;
+  }
+}
+
+/** 登录成功后重新加载当前用户的配置和日记摘要列表 */
+export async function loadUserData(): Promise<void> {
+  try {
+    state.config = await getConfig();
+    if (!state.config.categories) {
+      state.config.categories = ['生活', '工作', '心情', '随笔'];
+      await setConfigItem('categories', state.config.categories);
+    }
+    refreshTags();
+    await refreshEntrySummaries();
+    if (!state.config.hasPassword) {
+      state.isUnlocked = true;
+    }
+  } catch (error) {
+    console.error('加载用户数据失败:', error);
   }
 }
 
@@ -68,6 +100,7 @@ export function getCurrentEditId(): string | null { return state.currentEditId; 
 export function isAppUnlocked(): boolean { return state.isUnlocked; }
 export function getAllTagsList(): string[] { return state.allTags; }
 export function hasEntrySummaries(): boolean { return state.entrySummariesLoaded; }
+export function hasMoreEntrySummaries(): boolean { return state.entrySummariesHasMore; }
 export function getEntrySummaryById(id: string): DiaryEntrySummary | undefined {
   return state.allEntries.find(entry => entry.id === id);
 }
@@ -120,10 +153,12 @@ export async function refreshEntries(): Promise<DiaryEntry[]> {
 export async function refreshEntrySummaries(): Promise<DiaryEntrySummary[]> {
   if (entrySummaryRefreshPromise) return entrySummaryRefreshPromise;
 
-  entrySummaryRefreshPromise = getEntrySummaries()
-    .then(entries => {
-      state.allEntries = entries;
+  entrySummaryRefreshPromise = getEntrySummaryPage({ offset: 0, limit: ENTRY_SUMMARY_PAGE_SIZE })
+    .then(page => {
+      state.allEntries = page.entries;
       state.entrySummariesLoaded = true;
+      state.entrySummariesHasMore = page.hasMore;
+      state.entrySummariesNextOffset = page.nextOffset;
       refreshTags();
       persistEntrySummariesCache();
       return state.allEntries;
@@ -133,6 +168,26 @@ export async function refreshEntrySummaries(): Promise<DiaryEntrySummary[]> {
     });
 
   return entrySummaryRefreshPromise;
+}
+
+export async function loadMoreEntrySummaries(): Promise<DiaryEntrySummary[]> {
+  if (!state.entrySummariesHasMore) return state.allEntries;
+
+  const page = await getEntrySummaryPage({
+    offset: state.entrySummariesNextOffset,
+    limit: ENTRY_SUMMARY_PAGE_SIZE,
+  });
+  const existingIds = new Set(state.allEntries.map(entry => entry.id));
+  state.allEntries = [
+    ...state.allEntries,
+    ...page.entries.filter(entry => !existingIds.has(entry.id)),
+  ];
+  state.entrySummariesHasMore = page.hasMore;
+  state.entrySummariesNextOffset = page.nextOffset;
+  state.entrySummariesLoaded = true;
+  refreshTags();
+  persistEntrySummariesCache();
+  return state.allEntries;
 }
 
 export async function getFullEntryById(id: string): Promise<DiaryEntry | undefined> {
@@ -180,6 +235,8 @@ function hydrateEntrySummariesCache(): void {
       .map(normalizeCachedSummary)
       .filter((entry): entry is DiaryEntrySummary => Boolean(entry));
     state.entrySummariesLoaded = true;
+    state.entrySummariesHasMore = state.allEntries.length >= ENTRY_SUMMARY_PAGE_SIZE;
+    state.entrySummariesNextOffset = state.allEntries.length;
   } catch (error) {
     sessionStorage.removeItem(ENTRY_SUMMARIES_CACHE_KEY);
     console.warn('恢复日记摘要缓存失败:', error);

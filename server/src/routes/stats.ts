@@ -20,14 +20,15 @@ interface PeriodStats {
 }
 
 export async function registerStatsRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/api/v1/stats/overview', async () => {
+  app.get('/api/v1/stats/overview', async (request) => {
+    const userId = request.userId!;
     const rows = app.db.prepare(`
       SELECT e.*, c.name AS category_name
       FROM entries e
       LEFT JOIN categories c ON c.id = e.category_id
       WHERE e.user_id = ? AND e.is_deleted = 0
       ORDER BY e.date_for ASC
-    `).all(getUserId()) as unknown as EntryRow[];
+    `).all(userId) as unknown as EntryRow[];
 
     const total = rows.length;
     const totalWords = rows.reduce((sum, row) => sum + row.word_count, 0);

@@ -1,4 +1,4 @@
-﻿import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
   getUserId,
@@ -39,6 +39,7 @@ const listQuerySchema = z.object({
   dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   includeDeleted: z.enum(['true', 'false']).optional(),
   limit: z.coerce.number().int().min(1).max(500).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
   sort: z.enum(['dateFor_desc', 'updatedAt_desc']).optional(),
   view: z.enum(['summary', 'full']).optional(),
 });
@@ -64,8 +65,9 @@ function parseDataImage(src: string): { mime: string; bytes: Buffer } | null {
 export async function registerEntryRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/v1/entries', async (request) => {
     const query = listQuerySchema.parse(request.query);
+    const userId = request.userId!;
     const where = ['e.user_id = ?'];
-    const params: Array<string | number> = [getUserId()];
+    const params: Array<string | number> = [userId];
 
     if (query.includeDeleted !== 'true') {
       where.push('e.is_deleted = 0');
@@ -103,7 +105,8 @@ export async function registerEntryRoutes(app: FastifyInstance): Promise<void> {
       ? 'e.updated_at DESC'
       : 'e.date_for DESC, e.time_for DESC, e.updated_at DESC';
     const limit = query.limit ?? 200;
-    params.push(limit);
+    const offset = query.offset ?? 0;
+    params.push(limit + 1, offset);
 
     const rows = app.db.prepare(`
       SELECT e.*, c.name AS category_name
@@ -111,32 +114,38 @@ export async function registerEntryRoutes(app: FastifyInstance): Promise<void> {
       LEFT JOIN categories c ON c.id = e.category_id
       WHERE ${where.join(' AND ')}
       ORDER BY ${orderBy}
-      LIMIT ?
+      LIMIT ? OFFSET ?
     `).all(...params) as unknown as EntryRow[];
+    const pageRows = rows.slice(0, limit);
 
     return {
       entries: query.view === 'summary'
-        ? rows.map(rowToEntrySummary)
-        : rows.map(rowToEntry),
+        ? pageRows.map(rowToEntrySummary)
+        : pageRows.map(rowToEntry),
+      hasMore: rows.length > limit,
+      nextOffset: offset + pageRows.length,
     };
   });
 
   app.post('/api/v1/entries', async (request, reply) => {
     const body = entryBodySchema.parse(request.body) as EntryPayload;
-    const normalized = normalizeEntryPayload(app.db, body);
+    const userId = request.userId!;
+    const normalized = normalizeEntryPayload(app.db, body, undefined, userId);
     upsertEntry(app.db, normalized);
-    const row = selectEntryById(app.db, normalized.id);
+    const row = selectEntryById(app.db, normalized.id, userId);
     return reply.status(201).send({ entry: row ? rowToEntry(row) : null });
   });
 
-  app.delete('/api/v1/entries', async (_request, reply) => {
-    const result = app.db.prepare('DELETE FROM entries WHERE user_id = ?').run(getUserId());
+  app.delete('/api/v1/entries', async (request, reply) => {
+    const userId = request.userId!;
+    const result = app.db.prepare('DELETE FROM entries WHERE user_id = ?').run(userId);
     return reply.send({ deleted: result.changes });
   });
 
   app.get('/api/v1/entries/:id/first-image', async (request, reply) => {
     const { id } = idParamsSchema.parse(request.params);
-    const row = selectEntryById(app.db, id);
+    const userId = request.userId!;
+    const row = selectEntryById(app.db, id, userId);
     if (!row || row.is_deleted) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'Entry not found' });
     }
@@ -167,7 +176,8 @@ export async function registerEntryRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/v1/entries/:id', async (request, reply) => {
     const { id } = idParamsSchema.parse(request.params);
-    const row = selectEntryById(app.db, id);
+    const userId = request.userId!;
+    const row = selectEntryById(app.db, id, userId);
     if (!row || row.is_deleted) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: '日记不存在' });
     }
@@ -176,21 +186,23 @@ export async function registerEntryRoutes(app: FastifyInstance): Promise<void> {
 
   app.put('/api/v1/entries/:id', async (request, reply) => {
     const { id } = idParamsSchema.parse(request.params);
-    const existing = selectEntryById(app.db, id);
+    const userId = request.userId!;
+    const existing = selectEntryById(app.db, id, userId);
     if (!existing) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: '日记不存在' });
     }
 
     const body = entryBodySchema.parse(request.body) as EntryPayload;
-    const normalized = normalizeEntryPayload(app.db, body, { id, created_at: existing.created_at });
+    const normalized = normalizeEntryPayload(app.db, body, { id, created_at: existing.created_at }, userId);
     upsertEntry(app.db, normalized);
-    const row = selectEntryById(app.db, id);
+    const row = selectEntryById(app.db, id, userId);
     return { entry: row ? rowToEntry(row) : null };
   });
 
   app.delete('/api/v1/entries/:id', async (request, reply) => {
     const { id } = idParamsSchema.parse(request.params);
-    const existing = selectEntryById(app.db, id);
+    const userId = request.userId!;
+    const existing = selectEntryById(app.db, id, userId);
     if (!existing || existing.is_deleted) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: '日记不存在' });
     }
@@ -200,7 +212,7 @@ export async function registerEntryRoutes(app: FastifyInstance): Promise<void> {
       UPDATE entries
       SET is_deleted = 1, deleted_at = ?, updated_at = ?
       WHERE user_id = ? AND id = ?
-    `).run(now, now, getUserId(), id);
+    `).run(now, now, userId, id);
     return reply.status(204).send();
   });
 }

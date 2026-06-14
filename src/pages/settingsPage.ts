@@ -3,8 +3,8 @@ import { clearAllEntries, getAllEntries } from '../services/databaseService';
 import { exportAsJson, exportAsMarkdown, importFromJson } from '../utils/exportUtils';
 import { showToast } from '../components/toast';
 import { showModal, showInputModal } from '../components/modal';
-import CryptoJS from 'crypto-js';
 import { navigate } from '../router/router';
+import { getCurrentUser, changePassword } from '../store/authStore';
 
 /** 设置页面 */
 export async function renderSettingsPage(mainEl: HTMLElement): Promise<void> {
@@ -67,20 +67,16 @@ export async function renderSettingsPage(mainEl: HTMLElement): Promise<void> {
           </div>
         </section>
 
-        <!-- 隐私与安全 -->
+        <!-- 账户安全 -->
         <section class="settings-section">
-          <h2 class="settings-section-title">🔒 隐私与安全</h2>
+          <h2 class="settings-section-title">🔒 账户安全</h2>
           <div class="settings-item">
             <div class="settings-item-info">
-              <span class="settings-item-label">应用密码</span>
-              <span class="settings-item-desc">${config.hasPassword ? '已设置，启动时需要输入密码' : '未设置，任何人可访问'}</span>
+              <span class="settings-item-label">当前账户</span>
+              <span class="settings-item-desc">当前登录用户：${getCurrentUser()?.displayName || getCurrentUser()?.username || '未登录'}</span>
             </div>
             <div class="settings-item-actions">
-              ${config.hasPassword
-                ? `<button class="btn btn-ghost" id="change-pwd-btn">修改密码</button>
-                   <button class="btn btn-danger-ghost" id="remove-pwd-btn">取消密码</button>`
-                : `<button class="btn btn-primary" id="set-pwd-btn">设置密码</button>`
-              }
+              <button class="btn btn-ghost" id="change-pwd-btn">修改密码</button>
             </div>
           </div>
         </section>
@@ -188,53 +184,32 @@ function bindSettingsEvents(container: HTMLElement): void {
     });
   });
 
-  // 设置密码
-  container.querySelector('#set-pwd-btn')?.addEventListener('click', () => {
-    showInputModal({
-      title: '设置应用密码',
-      placeholder: '请输入密码（至少4位）',
-      inputType: 'password',
-      confirmText: '确认设置',
-      onConfirm: async (pwd) => {
-        if (pwd.length < 4) { showToast('密码至少需要4位', { type: 'error' }); return; }
-        const hash = CryptoJS.SHA256(pwd).toString();
-        await updateConfig('hasPassword', true);
-        await updateConfig('passwordHash', hash);
-        showToast('密码已设置', { type: 'success' });
-        await renderSettingsPage(container.querySelector('.page-settings')!.parentElement as HTMLElement);
-      },
-    });
-  });
-
   // 修改密码
   container.querySelector('#change-pwd-btn')?.addEventListener('click', () => {
     showInputModal({
-      title: '修改密码',
-      placeholder: '请输入新密码（至少4位）',
+      title: '修改密码：请输入旧密码',
+      placeholder: '请输入旧密码',
       inputType: 'password',
-      confirmText: '确认修改',
-      onConfirm: async (pwd) => {
-        if (pwd.length < 4) { showToast('密码至少需要4位', { type: 'error' }); return; }
-        const hash = CryptoJS.SHA256(pwd).toString();
-        await updateConfig('passwordHash', hash);
-        showToast('密码已更新', { type: 'success' });
-      },
-    });
-  });
+      confirmText: '下一步',
+      onConfirm: async (oldPwd) => {
+        if (!oldPwd) { showToast('旧密码不能为空', { type: 'error' }); return; }
 
-  // 取消密码
-  container.querySelector('#remove-pwd-btn')?.addEventListener('click', () => {
-    showModal({
-      title: '取消密码保护',
-      content: '确定要取消应用密码吗？取消后任何人都可以访问您的日记。',
-      confirmText: '取消密码',
-      confirmClass: 'btn-danger',
-      onConfirm: async () => {
-        await updateConfig('hasPassword', false);
-        await updateConfig('passwordHash', '');
-        showToast('已取消密码保护', { type: 'success' });
-        await renderSettingsPage(container.querySelector('.page-settings')!.parentElement as HTMLElement);
-      },
+        showInputModal({
+          title: '修改密码：请输入新密码',
+          placeholder: '请输入新密码（至少6位）',
+          inputType: 'password',
+          confirmText: '确认修改',
+          onConfirm: async (newPwd) => {
+            if (newPwd.length < 6) { showToast('新密码至少需要6位', { type: 'error' }); return; }
+            try {
+              await changePassword(oldPwd, newPwd);
+              showToast('密码修改成功', { type: 'success' });
+            } catch (err: any) {
+              showToast(err?.message || '密码修改失败', { type: 'error' });
+            }
+          }
+        });
+      }
     });
   });
 

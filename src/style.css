@@ -175,7 +175,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
+  flex: 1;
   cursor: default;
   user-select: none;
 }
@@ -250,7 +250,8 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-shrink: 0;
+  flex: 1;
+  justify-content: flex-end;
 }
 
 .theme-toggle-btn {
@@ -606,6 +607,24 @@ body {
   font-size: 0.875rem;
 }
 .list-no-result-icon { font-size: 2.5rem; }
+
+.list-load-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 0 32px;
+  color: var(--text-muted);
+}
+
+.list-load-more-count {
+  font-size: 0.78rem;
+}
+
+.list-load-more-btn {
+  min-width: 108px;
+  justify-content: center;
+}
 
 /* 空状态 */
 .empty-state {
@@ -2724,7 +2743,7 @@ body {
   .topbar-brand,
   .topbar-nav,
   .topbar-actions {
-    flex-shrink: 0;
+    flex: none;
   }
 
   .app-main {
@@ -4215,4 +4234,373 @@ body {
 .card-weather-tag .badge-label {
   font-size: 0.7rem;
   line-height: 1;
+}
+
+/* ==================== 登录/注册页面样式 & 顶栏个人信息下拉 ==================== */
+
+/* 隐藏外挂布局，使登录页面填满全屏 */
+.app-layout.layout-clean #app-topbar {
+  display: none !important;
+}
+.app-layout.layout-clean .app-main {
+  margin: 0 !important;
+  padding: 0 !important;
+  height: 100vh !important;
+  max-width: 100% !important;
+}
+.app-layout.layout-clean .app-main-wrap {
+  padding: 0 !important;
+  max-width: 100% !important;
+  height: 100% !important;
+}
+
+/* 登录背景与容器 */
+.login-page-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-app);
+  animation: fadeIn 0.4s ease;
+}
+
+.login-glow-bg {
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent) 0%, transparent 70%);
+  opacity: 0.12;
+  filter: blur(60px);
+  animation: gentleFloat 12s infinite alternate ease-in-out;
+  pointer-events: none;
+}
+
+/* 磨砂玻璃质感登录卡片 */
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 40px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.login-header {
+  text-align: center;
+}
+.login-logo {
+  font-size: 3rem;
+  margin-bottom: 12px;
+}
+.login-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+  font-family: var(--font-content);
+}
+.login-subtitle {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+/* Tab 切换按钮 */
+.login-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-light);
+  gap: 16px;
+}
+.login-tab-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 10px 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  position: relative;
+  transition: color var(--duration) var(--ease);
+}
+.login-tab-btn:hover {
+  color: var(--text-primary);
+}
+.login-tab-btn.active {
+  color: var(--accent);
+}
+.login-tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+/* 错误信息框 */
+.login-error-box {
+  background: rgba(229, 62, 62, 0.08);
+  border: 1px solid rgba(229, 62, 62, 0.2);
+  color: #e53e3e;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.form-group.hidden {
+  display: none;
+}
+.form-group label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.input-wrapper input {
+  width: 100%;
+  padding: 11px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  outline: none;
+  transition: all var(--duration) var(--ease);
+}
+.input-wrapper input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  font-size: 0.95rem;
+  color: var(--text-placeholder);
+}
+
+/* 提交按钮 */
+.login-submit-btn {
+  margin-top: 10px;
+  width: 100%;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: all var(--duration) var(--ease);
+}
+.login-submit-btn:hover {
+  background: var(--accent-light);
+  transform: translateY(-1px);
+}
+.login-submit-btn:active {
+  transform: translateY(1px);
+}
+.login-submit-btn[disabled] {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.btn-text.faded {
+  opacity: 0;
+}
+.btn-loader {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-loader.hidden {
+  display: none;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  animation: rotate 1.2s infinite linear;
+}
+.spinner circle {
+  stroke: currentColor;
+  stroke-linecap: round;
+  animation: dash 1.5s infinite ease-in-out;
+}
+
+@keyframes rotate {
+  100% { transform: rotate(360deg); }
+}
+@keyframes dash {
+  0% { stroke-dasharray: 1, 150; stroke-dashoffset: 0; }
+  50% { stroke-dasharray: 90, 150; stroke-dashoffset: -35; }
+  100% { stroke-dasharray: 90, 150; stroke-dashoffset: -124; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* 顶栏个人信息样式 */
+.topbar-user-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.topbar-user-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all var(--duration) var(--ease);
+}
+.topbar-user-btn:hover {
+  background: var(--border-light);
+  color: var(--text-primary);
+}
+
+.user-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-transform: uppercase;
+}
+
+.user-name {
+  font-size: 0.82rem;
+  font-weight: 500;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-dropdown-menu {
+  position: absolute;
+  top: 110%;
+  right: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  min-width: 140px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px);
+  transition: all 0.22s var(--ease-spring);
+  z-index: 1000;
+  padding: 6px 0;
+}
+
+.topbar-user-menu:hover .user-dropdown-menu,
+.topbar-user-menu.active .user-dropdown-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.user-dropdown-item {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 8px 16px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all var(--duration) var(--ease);
+  font-family: var(--font-ui);
+}
+
+.user-dropdown-item:hover {
+  background: var(--border-light);
+  color: var(--text-primary);
+}
+
+.user-dropdown-item.dropdown-danger {
+  color: #e53e3e;
+}
+.user-dropdown-item.dropdown-danger:hover {
+  background: rgba(229, 62, 62, 0.08);
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ==================== 设置与导航图标显示修复 ==================== */
+.nav-icon svg {
+  overflow: visible;
+}
+
+/* ==================== 阅读模式日记切换按钮容器（贴合居中日记卡片） ==================== */
+.view-nav-container {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-width: 1000px;
+  margin: 0 auto;
+  pointer-events: none;
+  z-index: 10;
+}
+.view-nav-btn {
+  pointer-events: auto;
 }

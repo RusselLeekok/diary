@@ -19,6 +19,7 @@ function migrate(db: Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
+      username TEXT UNIQUE,
       display_name TEXT NOT NULL,
       password_hash TEXT,
       created_at TEXT NOT NULL,
@@ -73,6 +74,21 @@ function migrate(db: Database): void {
   `);
 
   try {
+    db.exec('ALTER TABLE users ADD COLUMN username TEXT;');
+  } catch (e) {
+    // column already exists
+  }
+  try {
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username);');
+  } catch (e) {
+    // index already exists
+  }
+  try {
+    db.exec("UPDATE users SET username = 'local-user' WHERE username IS NULL;");
+  } catch (e) {
+    // handle error
+  }
+  try {
     db.exec('ALTER TABLE entries ADD COLUMN weather TEXT;');
   } catch (e) {
     // column already exists
@@ -87,9 +103,9 @@ function migrate(db: Database): void {
 function seedDefaultUser(db: Database): void {
   const now = nowIso();
   db.prepare(`
-    INSERT OR IGNORE INTO users (id, display_name, password_hash, created_at, updated_at)
-    VALUES (?, ?, NULL, ?, ?)
-  `).run(config.defaultUserId, 'Local User', now, now);
+    INSERT OR IGNORE INTO users (id, username, display_name, password_hash, created_at, updated_at)
+    VALUES (?, ?, ?, NULL, ?, ?)
+  `).run(config.defaultUserId, 'local-user', 'Local User', now, now);
 
   db.prepare(`
     INSERT OR IGNORE INTO settings (user_id, theme, font_size, auto_save_interval, updated_at)

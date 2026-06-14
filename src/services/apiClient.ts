@@ -20,6 +20,11 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     headers.set('Content-Type', 'application/json');
   }
 
+  const token = localStorage.getItem('diary-token');
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
@@ -45,6 +50,12 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     : await response.text();
 
   if (!response.ok) {
+    if (response.status === 401 && !path.includes('/auth/login') && !path.includes('/auth/register')) {
+      localStorage.removeItem('diary-token');
+      localStorage.removeItem('diary-user');
+      window.location.hash = '#/login';
+    }
+
     const message = typeof payload === 'object' && payload && 'message' in payload
       ? String((payload as { message: unknown }).message)
       : `请求失败：${response.status}`;

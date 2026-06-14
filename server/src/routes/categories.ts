@@ -11,7 +11,7 @@ const categoryBodySchema = z.object({
 
 const idParamsSchema = z.object({ id: z.string().min(1) });
 
-function listCategories(app: FastifyInstance) {
+function listCategories(app: FastifyInstance, userId: string) {
   const rows = app.db.prepare(`
     SELECT
       c.id,
@@ -25,7 +25,7 @@ function listCategories(app: FastifyInstance) {
     WHERE c.user_id = ?
     GROUP BY c.id
     ORDER BY c.sort_order ASC, c.name ASC
-  `).all(getUserId()) as Array<{
+  `).all(userId) as Array<{
     id: string;
     name: string;
     sort_order: number;
@@ -45,36 +45,38 @@ function listCategories(app: FastifyInstance) {
 }
 
 export async function registerCategoryRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/api/v1/categories', async () => ({ categories: listCategories(app) }));
+  app.get('/api/v1/categories', async (request) => ({ categories: listCategories(app, request.userId!) }));
 
   app.post('/api/v1/categories', async (request, reply) => {
     const body = categoryBodySchema.parse(request.body);
+    const userId = request.userId!;
     const exists = app.db.prepare('SELECT id FROM categories WHERE user_id = ? AND name = ?')
-      .get(getUserId(), body.name);
+      .get(userId, body.name);
     if (exists) {
       return reply.status(409).send({ error: 'CATEGORY_EXISTS', message: '分类已存在' });
     }
 
     const now = nowIso();
     const id = randomUUID();
-    const sortOrder = body.sortOrder ?? listCategories(app).length;
+    const sortOrder = body.sortOrder ?? listCategories(app, userId).length;
     app.db.prepare(`
       INSERT INTO categories (id, user_id, name, sort_order, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(id, getUserId(), body.name, sortOrder, now, now);
+    `).run(id, userId, body.name, sortOrder, now, now);
 
-    return reply.status(201).send({ category: listCategories(app).find(category => category.id === id) });
+    return reply.status(201).send({ category: listCategories(app, userId).find(category => category.id === id) });
   });
 
   app.put('/api/v1/categories/:id', async (request, reply) => {
     const { id } = idParamsSchema.parse(request.params);
     const body = categoryBodySchema.parse(request.body);
+    const userId = request.userId!;
     const current = app.db.prepare('SELECT id FROM categories WHERE user_id = ? AND id = ?')
-      .get(getUserId(), id);
+      .get(userId, id);
     if (!current) return reply.status(404).send({ error: 'NOT_FOUND', message: '分类不存在' });
 
     const duplicate = app.db.prepare('SELECT id FROM categories WHERE user_id = ? AND name = ? AND id <> ?')
-      .get(getUserId(), body.name, id);
+      .get(userId, body.name, id);
     if (duplicate) {
       return reply.status(409).send({ error: 'CATEGORY_EXISTS', message: '分类已存在' });
     }
@@ -83,22 +85,23 @@ export async function registerCategoryRoutes(app: FastifyInstance): Promise<void
       UPDATE categories
       SET name = ?, sort_order = COALESCE(?, sort_order), updated_at = ?
       WHERE user_id = ? AND id = ?
-    `).run(body.name, body.sortOrder ?? null, nowIso(), getUserId(), id);
+    `).run(body.name, body.sortOrder ?? null, nowIso(), userId, id);
 
-    return { category: listCategories(app).find(category => category.id === id) };
+    return { category: listCategories(app, userId).find(category => category.id === id) };
   });
 
   app.delete('/api/v1/categories/:id', async (request, reply) => {
     const { id } = idParamsSchema.parse(request.params);
+    const userId = request.userId!;
     const current = app.db.prepare('SELECT id FROM categories WHERE user_id = ? AND id = ?')
-      .get(getUserId(), id);
+      .get(userId, id);
     if (!current) return reply.status(404).send({ error: 'NOT_FOUND', message: '分类不存在' });
 
     app.db.exec('BEGIN');
     try {
       app.db.prepare('UPDATE entries SET category_id = NULL, updated_at = ? WHERE user_id = ? AND category_id = ?')
-        .run(nowIso(), getUserId(), id);
-      app.db.prepare('DELETE FROM categories WHERE user_id = ? AND id = ?').run(getUserId(), id);
+        .run(nowIso(), userId, id);
+      app.db.prepare('DELETE FROM categories WHERE user_id = ? AND id = ?').run(userId, id);
       app.db.exec('COMMIT');
     } catch (error) {
       app.db.exec('ROLLBACK');

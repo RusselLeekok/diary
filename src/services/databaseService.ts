@@ -8,10 +8,14 @@ interface EntryResponse {
 
 interface EntriesResponse {
   entries: ServerEntry[];
+  hasMore?: boolean;
+  nextOffset?: number;
 }
 
 interface EntrySummariesResponse {
   entries: ServerEntry[];
+  hasMore?: boolean;
+  nextOffset?: number;
 }
 
 interface ServerEntry {
@@ -33,6 +37,9 @@ interface ServerEntry {
   location?: string;
   firstImageSrc?: string;
 }
+
+const DEFAULT_ENTRY_LIST_LIMIT = 200;
+export const ENTRY_SUMMARY_PAGE_SIZE = 120;
 
 interface CategoriesResponse {
   categories: Array<{ id: string; name: string; entryCount?: number }>;
@@ -142,13 +149,35 @@ function entryPayload(entry: DiaryEntry) {
 }
 
 export async function getAllEntries(): Promise<DiaryEntry[]> {
-  const data = await apiRequest<EntriesResponse>('/entries?limit=500');
+  const data = await apiRequest<EntriesResponse>(`/entries?limit=${DEFAULT_ENTRY_LIST_LIMIT}`);
   return data.entries.map(toDiaryEntry);
 }
 
 export async function getEntrySummaries(): Promise<DiaryEntrySummary[]> {
-  const data = await apiRequest<EntrySummariesResponse>('/entries?view=summary&limit=500');
-  return data.entries.map(toDiaryEntrySummary);
+  const data = await getEntrySummaryPage();
+  return data.entries;
+}
+
+export async function getEntrySummaryPage(options: { limit?: number; offset?: number } = {}): Promise<{
+  entries: DiaryEntrySummary[];
+  hasMore: boolean;
+  nextOffset: number;
+}> {
+  const params = new URLSearchParams({
+    view: 'summary',
+    limit: String(options.limit ?? ENTRY_SUMMARY_PAGE_SIZE),
+  });
+  if (options.offset) params.set('offset', String(options.offset));
+
+  const data = await apiRequest<EntrySummariesResponse>(`/entries?${params.toString()}`);
+  const entries = data.entries.map(toDiaryEntrySummary);
+  return {
+    entries,
+    hasMore: Boolean(data.hasMore),
+    nextOffset: typeof data.nextOffset === 'number'
+      ? data.nextOffset
+      : (options.offset ?? 0) + entries.length,
+  };
 }
 
 export async function getEntryById(id: string): Promise<DiaryEntry | undefined> {

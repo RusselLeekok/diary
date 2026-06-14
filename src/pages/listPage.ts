@@ -1,4 +1,11 @@
-import { getEntries, refreshEntrySummaries, hasEntrySummaries, getAllTagsList } from '../store/appStore';
+import {
+  getEntries,
+  refreshEntrySummaries,
+  hasEntrySummaries,
+  getAllTagsList,
+  hasMoreEntrySummaries,
+  loadMoreEntrySummaries,
+} from '../store/appStore';
 import { renderDiaryCard, bindCardEvents } from '../components/diaryCard';
 import { navigate } from '../router/router';
 import type { DiaryEntrySummary, MoodType } from '../types';
@@ -40,6 +47,11 @@ let searchDateTo = '';
 let searchTags: string[] = [];
 let isFilterExpanded = false;
 let isEntriesLoading = false;
+let isLoadingMoreEntries = false;
+
+const ENTRY_RENDER_BATCH_SIZE = 30;
+const LIST_VISIBLE_COUNT_KEY = 'list-visible-entry-count';
+let visibleEntryCount = ENTRY_RENDER_BATCH_SIZE;
 
 // 防抖计时器
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -53,6 +65,7 @@ export async function renderListPage(mainEl: HTMLElement, params?: Record<string
   const hadCache = hasEntrySummaries();
   isEntriesLoading = !hadCache;
   currentEntries = getEntries();
+  visibleEntryCount = getSavedVisibleEntryCount();
 
   // 解析是否需要调起搜索
   const shouldSearch = params?.search === 'true';
@@ -61,6 +74,7 @@ export async function renderListPage(mainEl: HTMLElement, params?: Record<string
   if (shouldSearch || initKeyword) {
     isFilterExpanded = true;
     searchKeyword = initKeyword;
+    resetVisibleEntryCount();
   } else {
     // 正常进入时清除筛选状态
     searchKeyword = '';
@@ -124,6 +138,24 @@ function restoreListScroll(mainEl: HTMLElement): void {
       pageListEl.classList.remove('is-restoring');
     }
   });
+}
+
+function getSavedVisibleEntryCount(): number {
+  const raw = sessionStorage.getItem(LIST_VISIBLE_COUNT_KEY);
+  const count = raw ? Number.parseInt(raw, 10) : ENTRY_RENDER_BATCH_SIZE;
+  if (!Number.isFinite(count) || count < ENTRY_RENDER_BATCH_SIZE) {
+    return ENTRY_RENDER_BATCH_SIZE;
+  }
+  return count;
+}
+
+function persistVisibleEntryCount(): void {
+  sessionStorage.setItem(LIST_VISIBLE_COUNT_KEY, String(visibleEntryCount));
+}
+
+function resetVisibleEntryCount(): void {
+  visibleEntryCount = ENTRY_RENDER_BATCH_SIZE;
+  sessionStorage.removeItem(LIST_VISIBLE_COUNT_KEY);
 }
 
 // ====================================================
@@ -429,14 +461,17 @@ function buildEntriesHTML(entries: DiaryEntrySummary[]): string {
     `;
   }
 
+  const totalEntries = entries.length;
+  const visibleEntries = entries.slice(0, visibleEntryCount);
+
   // 按日期分组
   const groups = new Map<string, DiaryEntrySummary[]>();
-  entries.forEach(e => {
+  visibleEntries.forEach(e => {
     if (!groups.has(e.dateFor)) groups.set(e.dateFor, []);
     groups.get(e.dateFor)!.push(e);
   });
 
-  return Array.from(groups.entries()).map(([date, items]) => {
+  const groupsHTML = Array.from(groups.entries()).map(([date, items]) => {
     const [y, m, dd] = date.split('-');
     return `
       <div class="entry-group">
@@ -450,6 +485,23 @@ function buildEntriesHTML(entries: DiaryEntrySummary[]): string {
       </div>
     `;
   }).join('');
+
+  if (visibleEntries.length >= totalEntries && !hasMoreEntrySummaries()) {
+    return groupsHTML;
+  }
+
+  const countText = hasMoreEntrySummaries()
+    ? `已显示 ${visibleEntries.length} / ${totalEntries}+ 篇`
+    : `已显示 ${visibleEntries.length} / ${totalEntries} 篇`;
+  const buttonText = isLoadingMoreEntries ? '加载中…' : '加载更多';
+
+  return `
+    ${groupsHTML}
+    <div class="list-load-more">
+      <span class="list-load-more-count">${countText}</span>
+      <button class="btn btn-ghost list-load-more-btn" id="list-load-more-btn" type="button" ${isLoadingMoreEntries ? 'disabled' : ''}>${buttonText}</button>
+    </div>
+  `;
 }
 
 function buildEntriesLoadingHTML(): string {
@@ -531,6 +583,7 @@ function getFilteredEntries(): DiaryEntrySummary[] {
 // ====================================================
 function bindPageEvents(container: HTMLElement): void {
   container.querySelector('#empty-new-btn')?.addEventListener('click', () => navigate('editor'));
+  bindLoadMoreEvent(container);
 
   // 绑定搜索输入框与防抖
   const searchInput = container.querySelector('#search-keyword') as HTMLInputElement | null;
@@ -538,6 +591,7 @@ function bindPageEvents(container: HTMLElement): void {
     searchInput.addEventListener('input', () => {
       debounce(() => {
         searchKeyword = searchInput.value.trim();
+        resetVisibleEntryCount();
         updateFilteredResults(container);
       }, 200);
     });
@@ -564,6 +618,7 @@ function bindPageEvents(container: HTMLElement): void {
         container.querySelectorAll('.filter-mood-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
       }
+      resetVisibleEntryCount();
       updateFilteredResults(container);
     });
   });
@@ -582,6 +637,7 @@ function bindPageEvents(container: HTMLElement): void {
       triggerClass: 'filter-date-input',
       onChange: (date) => {
         searchDateFrom = date;
+        resetVisibleEntryCount();
         updateFilteredResults(container);
       }
     });
@@ -595,6 +651,7 @@ function bindPageEvents(container: HTMLElement): void {
       triggerClass: 'filter-date-input',
       onChange: (date) => {
         searchDateTo = date;
+        resetVisibleEntryCount();
         updateFilteredResults(container);
       }
     });
@@ -611,6 +668,7 @@ function bindPageEvents(container: HTMLElement): void {
         searchTags.push(tag);
         btn.classList.add('active');
       }
+      resetVisibleEntryCount();
       updateFilteredResults(container);
     });
   });
@@ -620,6 +678,7 @@ function bindPageEvents(container: HTMLElement): void {
     searchKeyword = '';
     if (searchInput) searchInput.value = '';
     (e.target as HTMLElement).remove();
+    resetVisibleEntryCount();
     updateFilteredResults(container);
   });
 
@@ -635,6 +694,7 @@ function bindPageEvents(container: HTMLElement): void {
       sidebarTab = tab;
       if (tab === 'category') { selectedDate = null; }
       else { selectedCategory = null; }
+      resetVisibleEntryCount();
       container.querySelectorAll('.sidebar-tab').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       container.querySelectorAll('.sidebar-panel').forEach(p => p.classList.remove('active'));
@@ -680,6 +740,7 @@ function bindCategoryEvents(container: HTMLElement): void {
       } else {
         selectedCategory = cat;
       }
+      resetVisibleEntryCount();
       container.querySelectorAll('.cat-list-item').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       refreshContent(container);
@@ -699,6 +760,7 @@ function bindCalendarEvents(container: HTMLElement): void {
   container.querySelector('#cal-goto-today')?.addEventListener('click', () => {
     const now = new Date(); calYear = now.getFullYear(); calMonth = now.getMonth();
     selectedDate = null;
+    resetVisibleEntryCount();
     refreshCalendar(container); refreshContent(container);
   });
   bindCalDayClick(container);
@@ -709,6 +771,7 @@ function bindCalDayClick(container: HTMLElement): void {
     cell.addEventListener('click', () => {
       const date = (cell as HTMLElement).dataset.date!;
       selectedDate = selectedDate === date ? null : date;
+      resetVisibleEntryCount();
       container.querySelectorAll('.cal-day').forEach(c => c.classList.remove('selected'));
       if (selectedDate) cell.classList.add('selected');
       refreshContent(container);
@@ -730,6 +793,7 @@ function updateFilteredResults(container: HTMLElement): void {
   if (entriesWrap) {
     entriesWrap.innerHTML = buildEntriesHTML(getFilteredEntries());
     entriesWrap.querySelector('#empty-new-btn')?.addEventListener('click', () => navigate('editor'));
+    bindLoadMoreEvent(container);
     // 重新绑定卡片事件
     bindCardEvents(entriesWrap as HTMLElement, async () => {
       await refreshEntrySummaries();
@@ -761,6 +825,7 @@ function updateFilteredResults(container: HTMLElement): void {
             searchKeyword = '';
             if (searchInput) searchInput.value = '';
             btn.remove();
+            resetVisibleEntryCount();
             updateFilteredResults(container);
           });
           inputContainer.appendChild(btn);
@@ -829,6 +894,35 @@ function resetAllFilters(container: HTMLElement): void {
   updateFilteredResults(container);
   refreshCalendar(container);
   refreshCategoryPanel(container);
+}
+
+function bindLoadMoreEvent(container: HTMLElement): void {
+  const button = container.querySelector('#list-load-more-btn') as HTMLButtonElement | null;
+  if (!button) return;
+
+  button.addEventListener('click', () => {
+    void loadNextEntryBatch(container);
+  });
+}
+
+async function loadNextEntryBatch(container: HTMLElement): Promise<void> {
+  if (isLoadingMoreEntries) return;
+
+  const filteredCount = getFilteredEntries().length;
+  if (visibleEntryCount >= filteredCount && hasMoreEntrySummaries()) {
+    isLoadingMoreEntries = true;
+    updateFilteredResults(container);
+    try {
+      await loadMoreEntrySummaries();
+      currentEntries = getEntries();
+    } finally {
+      isLoadingMoreEntries = false;
+    }
+  }
+
+  visibleEntryCount += ENTRY_RENDER_BATCH_SIZE;
+  persistVisibleEntryCount();
+  updateFilteredResults(container);
 }
 
 function refreshCalendar(container: HTMLElement): void {

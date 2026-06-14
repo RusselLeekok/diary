@@ -11,9 +11,14 @@ const app = await buildApp();
 try {
   type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   type JsonPayload = Record<string, unknown>;
+  let token = '';
 
   const request = async (method: Method, url: string, payload?: JsonPayload) => {
-    const response = await app.inject({ method, url, payload });
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers.authorization = `Bearer ${token}`;
+    }
+    const response = await app.inject({ method, url, payload, headers });
     const body = response.body ? JSON.parse(response.body) as any : {};
     if (response.statusCode >= 400) {
       throw new Error(`${method} ${url} failed: ${response.statusCode} ${response.body}`);
@@ -23,6 +28,22 @@ try {
 
   const health = await request('GET', '/api/v1/health');
   assert(health.body.ok === true, 'health check failed');
+
+  // 注册测试用户
+  const registerRes = await request('POST', '/api/v1/auth/register', {
+    username: 'smoketestuser',
+    password: 'password123',
+    displayName: 'Smoke Tester',
+  });
+  assert(registerRes.body.success === true, 'registration failed');
+
+  // 登录获取 Token
+  const loginRes = await request('POST', '/api/v1/auth/login', {
+    username: 'smoketestuser',
+    password: 'password123',
+  });
+  assert(!!loginRes.body.token, 'login failed');
+  token = loginRes.body.token;
 
   const categories = await request('GET', '/api/v1/categories');
   assert(categories.body.categories.length >= 4, 'default categories missing');

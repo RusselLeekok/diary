@@ -1,10 +1,11 @@
 import type { PageName } from '../types';
+import { getToken } from '../store/authStore';
 
 type RouteHandler = (params?: Record<string, string>) => void;
 
 // 路由表
 const routes: Map<PageName, RouteHandler> = new Map();
-const VALID_PAGES = new Set<PageName>(['list', 'editor', 'calendar', 'trash', 'stats', 'settings', 'view']);
+const VALID_PAGES = new Set<PageName>(['list', 'editor', 'calendar', 'trash', 'stats', 'settings', 'view', 'login']);
 
 // 当前页面
 let currentPage: PageName = 'list';
@@ -14,12 +15,35 @@ export function registerRoute(page: PageName, handler: RouteHandler): void {
   routes.set(page, handler);
 }
 
+function checkAuthGuard(page: PageName, params?: Record<string, string>): PageName {
+  const hasToken = !!getToken();
+
+  if (!hasToken && page !== 'login') {
+    // 记住重定向目标
+    const redirectParam = params ? `${page}?${new URLSearchParams(params).toString()}` : page;
+    window.location.hash = `#/login?redirect=${encodeURIComponent(redirectParam)}`;
+    return 'login';
+  }
+
+  if (hasToken && page === 'login') {
+    window.location.hash = '#/list';
+    return 'list';
+  }
+
+  return page;
+}
+
 /** 跳转到指定页面 */
 export function navigate(page: PageName, params?: Record<string, string>): void {
   // 清理可能残留的图片灯箱
   const activeLightbox = document.querySelector('.image-lightbox') as any;
   if (activeLightbox && typeof activeLightbox.closeLightbox === 'function') {
     activeLightbox.closeLightbox();
+  }
+
+  const guardedPage = checkAuthGuard(page, params);
+  if (guardedPage !== page) {
+    return;
   }
 
   currentPage = page;
@@ -40,6 +64,16 @@ function render(page: PageName, params?: Record<string, string>): void {
   if (!handler) {
     console.warn(`未找到页面路由: ${page}`);
     return;
+  }
+
+  // 针对登录页面切换应用外壳样式，隐藏边栏/顶栏
+  const appLayoutEl = document.querySelector('.app-layout');
+  if (appLayoutEl) {
+    if (page === 'login') {
+      appLayoutEl.classList.add('layout-clean');
+    } else {
+      appLayoutEl.classList.remove('layout-clean');
+    }
   }
 
   const mainEl = document.getElementById('main-content');
@@ -82,12 +116,18 @@ function parseHash(): { page: PageName; params: Record<string, string> } {
 export function initRouter(): void {
   window.addEventListener('hashchange', () => {
     const { page, params } = parseHash();
+    const guardedPage = checkAuthGuard(page, params);
+    if (guardedPage !== page) return;
+
     currentPage = page;
     render(page, params);
     updateNavHighlight(page);
   });
   // 初始渲染
   const { page, params } = parseHash();
+  const guardedPage = checkAuthGuard(page, params);
+  if (guardedPage !== page) return;
+
   currentPage = page;
   render(page, params);
   updateNavHighlight(page);

@@ -11,12 +11,21 @@ const settingsSchema = z.object({
   autoSaveInterval: z.number().int().min(5).max(3600).optional(),
 });
 
-function getSettings(app: FastifyInstance) {
+function getSettings(app: FastifyInstance, userId: string) {
   const row = app.db.prepare(`
     SELECT theme, font_size, auto_save_interval, updated_at
     FROM settings
     WHERE user_id = ?
-  `).get(getUserId()) as { theme: string; font_size: string; auto_save_interval: number; updated_at: string };
+  `).get(userId) as { theme: string; font_size: string; auto_save_interval: number; updated_at: string } | undefined;
+
+  if (!row) {
+    return {
+      theme: 'light',
+      fontSize: 'md',
+      autoSaveInterval: 30,
+      updatedAt: nowIso(),
+    };
+  }
 
   return {
     theme: row.theme,
@@ -27,11 +36,12 @@ function getSettings(app: FastifyInstance) {
 }
 
 export async function registerSettingsRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/api/v1/settings', async () => getSettings(app));
+  app.get('/api/v1/settings', async (request) => getSettings(app, request.userId!));
 
   app.patch('/api/v1/settings', async (request) => {
     const body = settingsSchema.parse(request.body);
-    const current = getSettings(app);
+    const userId = request.userId!;
+    const current = getSettings(app, userId);
     const next = {
       theme: body.theme ?? current.theme,
       fontSize: body.fontSize ?? current.fontSize,
@@ -43,7 +53,7 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
       UPDATE settings
       SET theme = ?, font_size = ?, auto_save_interval = ?, updated_at = ?
       WHERE user_id = ?
-    `).run(next.theme, next.fontSize, next.autoSaveInterval, next.updatedAt, getUserId());
+    `).run(next.theme, next.fontSize, next.autoSaveInterval, next.updatedAt, userId);
 
     return next;
   });

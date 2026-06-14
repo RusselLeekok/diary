@@ -100,23 +100,26 @@ export async function renderViewPage(mainEl: HTMLElement, params?: Record<string
         </div>
       </div>
 
-      <!-- 上一篇 (Newer) 按钮 -->
-      ${prevEntry ? `
-        <button class="view-nav-btn view-nav-prev" id="view-prev" title="上一篇：${escapeHtml(prevEntry.title || '无标题')}">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20">
-            <polyline points="15 18 9 12 15 6"/>
-          </svg>
-        </button>
-      ` : ''}
+      <!-- 页面切换按钮容器（限定 max-width 并居中，防止按钮在大屏下偏移过远） -->
+      <div class="view-nav-container">
+        <!-- 上一篇 (Newer) 按钮 -->
+        ${prevEntry ? `
+          <button class="view-nav-btn view-nav-prev" id="view-prev" title="上一篇：${escapeHtml(prevEntry.title || '无标题')}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+          </button>
+        ` : ''}
 
-      <!-- 下一篇 (Older) 按钮 -->
-      ${nextEntry ? `
-        <button class="view-nav-btn view-nav-next" id="view-next" title="下一篇：${escapeHtml(nextEntry.title || '无标题')}">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20">
-            <polyline points="9 18 15 12 9 6"/>
-          </svg>
-        </button>
-      ` : ''}
+        <!-- 下一篇 (Older) 按钮 -->
+        ${nextEntry ? `
+          <button class="view-nav-btn view-nav-next" id="view-next" title="下一篇：${escapeHtml(nextEntry.title || '无标题')}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </button>
+        ` : ''}
+      </div>
 
       <!-- ★ 下方独立滚动区 -->
       <div class="view-scroll">

@@ -11,6 +11,8 @@ import { renderSettingsPage } from './pages/settingsPage';
 import { renderViewPage } from './pages/viewPage';
 import { renderTrashPage } from './pages/trashPage';
 import { escapeHtml } from './utils/htmlUtils';
+import { checkAuth } from './store/authStore';
+import { renderLoginPage } from './pages/loginPage';
 
 const THEME_VALUES = new Set(['light', 'dark', 'green', 'blue', 'pink', 'plain']);
 const FONT_SIZE_VALUES = new Set(['sm', 'md', 'lg', 'xl']);
@@ -69,6 +71,7 @@ function registerAppRoutes(mainEl: HTMLElement): void {
   registerRoute('stats', (_p) => renderStatsPage(mainEl));
   registerRoute('settings', (_p) => renderSettingsPage(mainEl));
   registerRoute('view', (p) => renderViewPage(mainEl, p));
+  registerRoute('login', (_p) => renderLoginPage(mainEl));
 }
 
 async function bootstrap(): Promise<void> {
@@ -76,6 +79,9 @@ async function bootstrap(): Promise<void> {
   const mainEl = renderAppShell();
 
   await initStore();
+  // 检查本地 Token 并自动校验登录状态
+  await checkAuth();
+
   persistConfiguredAppearanceFallback();
   applyAppearance();
   renderTopbar(document.getElementById('app-topbar')!);
