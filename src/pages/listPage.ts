@@ -511,15 +511,43 @@ function buildEntriesHTML(entries: DiaryEntrySummary[]): string {
       `;
     }
 
+    // 检查是否启用了搜索、筛选或那年今日
+    const isSearchOrFilterActive = !!(
+      searchKeyword ||
+      searchMood ||
+      searchDateFrom ||
+      searchDateTo ||
+      searchTags.length > 0 ||
+      isHistoryTodayActive
+    );
+
+    if (isSearchOrFilterActive) {
+      return `
+        <div class="empty-state search-empty-state">
+          <div class="empty-hero">
+            <img src="/hero.png" alt="无搜索结果" class="empty-hero-img filter-muted" />
+          </div>
+          <h2 class="empty-title">没有找到符合条件的日记</h2>
+          <p class="empty-desc">试着调整一下搜索关键词、分类<br>或筛选条件吧。</p>
+          <button class="btn btn-primary empty-cta" id="empty-clear-filters-btn">清除全部筛选</button>
+        </div>
+      `;
+    }
+
     const label = selectedCategory === ''
       ? '没有未分类的日记'
       : selectedCategory
         ? `分类「${escapeHtml(selectedCategory)}」没有日记`
         : '没有找到符合条件的日记';
+
     return `
-      <div class="list-no-result">
-        <span class="list-no-result-icon">📭</span>
-        <p>${label}</p>
+      <div class="empty-state category-empty-state">
+        <div class="empty-hero">
+          <img src="/hero.png" alt="空分类" class="empty-hero-img filter-muted" />
+        </div>
+        <h2 class="empty-title">${label}</h2>
+        <p class="empty-desc">在这里写下你的第一篇日记吧。</p>
+        <button class="btn btn-primary empty-cta" id="empty-new-btn">开始写日记</button>
       </div>
     `;
   }
@@ -675,6 +703,9 @@ function bindPageEvents(container: HTMLElement): void {
   container.querySelector('#empty-new-btn')?.addEventListener('click', () => navigate('editor'));
   container.querySelector('#calendar-empty-new-btn')?.addEventListener('click', () => {
     if (selectedDate) navigate('editor', { date: selectedDate });
+  });
+  container.querySelector('#empty-clear-filters-btn')?.addEventListener('click', () => {
+    resetAllFilters(container);
   });
   bindLoadMoreEvent(container);
 
@@ -896,6 +927,9 @@ function updateFilteredResults(container: HTMLElement): void {
     entriesWrap.querySelector('#empty-new-btn')?.addEventListener('click', () => navigate('editor'));
     entriesWrap.querySelector('#calendar-empty-new-btn')?.addEventListener('click', () => {
       if (selectedDate) navigate('editor', { date: selectedDate });
+    });
+    entriesWrap.querySelector('#empty-clear-filters-btn')?.addEventListener('click', () => {
+      resetAllFilters(container);
     });
     bindLoadMoreEvent(container);
     // 重新绑定卡片事件

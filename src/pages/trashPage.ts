@@ -6,6 +6,8 @@ import type { DiaryEntrySummary } from '../types';
 import { formatDisplayDate } from '../utils/dateUtils';
 import { showModal } from '../components/modal';
 import { showToast } from '../components/toast';
+import { bindCardImagePreviews, renderCardImage } from '../components/diaryCard';
+import { escapeHtml } from '../utils/htmlUtils';
 
 /**
  * 渲染垃圾箱页面
@@ -75,9 +77,16 @@ function renderTrashCard(entry: DiaryEntrySummary): string {
   const dateStr = formatDisplayDate(entry.dateFor);
   const timeStr = entry.timeFor ? ' ' + entry.timeFor : '';
   const textPreview = entry.plainText.slice(0, 160).trim() || '这篇日记没有正文内容。';
+  const imagePreview = entry.firstImageSrc
+    ? `<div class="trash-card-image">${renderCardImage(entry.firstImageSrc, entry.updatedAt)}</div>`
+    : '';
+  const safeId = escapeHtml(entry.id);
+  const safeTitle = escapeHtml(entry.title || '无标题');
+  const safeDateText = escapeHtml(`${dateStr}${timeStr}`);
+  const safeTextPreview = escapeHtml(textPreview);
 
   return `
-    <article class="trash-card" data-id="${entry.id}">
+    <article class="trash-card" data-id="${safeId}">
       <div class="trash-card-body">
         <div class="trash-card-meta">
           ${entry.mood && entry.mood !== 'none' ? `
@@ -86,20 +95,21 @@ function renderTrashCard(entry: DiaryEntrySummary): string {
               <span>${mood.label}</span>
             </div>
           ` : ''}
-          <span class="trash-card-date">${dateStr}${timeStr}</span>
+          <span class="trash-card-date">${safeDateText}</span>
         </div>
-        <h3 class="trash-card-title">${entry.title || '无标题'}</h3>
-        <p class="trash-card-preview">${textPreview}</p>
+        <h3 class="trash-card-title">${safeTitle}</h3>
+        <p class="trash-card-preview">${safeTextPreview}</p>
       </div>
+      ${imagePreview}
       <div class="trash-card-actions">
-        <button class="btn btn-ghost trash-btn-restore" data-id="${entry.id}">
+        <button class="btn btn-ghost trash-btn-restore" data-id="${safeId}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13">
             <polyline points="23 4 23 10 17 10"/>
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
           </svg>
           恢复
         </button>
-        <button class="btn btn-ghost trash-btn-delete" data-id="${entry.id}">
+        <button class="btn btn-ghost trash-btn-delete" data-id="${safeId}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13">
             <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
           </svg>
@@ -114,6 +124,8 @@ function renderTrashCard(entry: DiaryEntrySummary): string {
  * 绑定按钮点击事件
  */
 function bindPageEvents(container: HTMLElement, trashed: DiaryEntrySummary[]): void {
+  bindCardImagePreviews(container);
+
   // 返回列表按钮
   container.querySelector('#trash-back-list')?.addEventListener('click', () => {
     navigate('list');

@@ -741,18 +741,10 @@ body {
   padding: 24px 24px;
 }
 
-/* 没有结果提示 */
-.list-no-result {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 60px 20px;
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 0.875rem;
+/* 空状态插图滤镜（搜索无匹配/空分类） */
+.empty-hero-img.filter-muted {
+  filter: grayscale(0.35) sepia(0.15);
 }
-.list-no-result-icon { font-size: 2.5rem; }
 
 .list-load-more {
   display: flex;
