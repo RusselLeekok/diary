@@ -37,7 +37,16 @@ export function showToast(message: string, options: ToastOptions = {}): void {
   text.className = 'toast-message';
   text.textContent = message;
   el.append(icon, text);
-  getContainer().appendChild(el);
+  const parent = getContainer();
+  while (parent.children.length >= 3) {
+    const oldest = parent.firstElementChild;
+    if (oldest) {
+      parent.removeChild(oldest);
+    } else {
+      break;
+    }
+  }
+  parent.appendChild(el);
   // 入场动画触发
   requestAnimationFrame(() => el.classList.add('toast-visible'));
   // 自动消失

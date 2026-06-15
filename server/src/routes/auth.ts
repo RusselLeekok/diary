@@ -73,8 +73,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/v1/auth/login', async (request, reply) => {
     const { username, password } = loginSchema.parse(request.body);
 
-    const user = app.db.prepare('SELECT id, username, display_name, password_hash FROM users WHERE username = ?')
-      .get(username) as { id: string; username: string; display_name: string; password_hash: string | null } | undefined;
+    const user = app.db.prepare('SELECT id, username, display_name, avatar, password_hash FROM users WHERE username = ?')
+      .get(username) as { id: string; username: string; display_name: string; avatar: string | null; password_hash: string | null } | undefined;
 
     if (!user || !user.password_hash || !verifyPassword(password, user.password_hash)) {
       return reply.status(401).send({ error: 'INVALID_CREDENTIALS', message: '用户名或密码不正确' });
@@ -88,6 +88,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         id: user.id,
         username: user.username,
         displayName: user.display_name,
+        avatar: user.avatar,
       },
     };
   });
@@ -103,8 +104,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(401).send({ error: 'UNAUTHORIZED', message: '请先登录' });
     }
 
-    const user = app.db.prepare('SELECT id, username, display_name, created_at FROM users WHERE id = ?')
-      .get(request.userId) as { id: string; username: string; display_name: string; created_at: string } | undefined;
+    const user = app.db.prepare('SELECT id, username, display_name, avatar, created_at FROM users WHERE id = ?')
+      .get(request.userId) as { id: string; username: string; display_name: string; avatar: string | null; created_at: string } | undefined;
 
     if (!user) {
       return reply.status(404).send({ error: 'USER_NOT_FOUND', message: '用户不存在' });
@@ -114,6 +115,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       id: user.id,
       username: user.username,
       displayName: user.display_name,
+      avatar: user.avatar,
       createdAt: user.created_at,
     };
   });
@@ -138,5 +140,70 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       .run(newHash, nowIso(), request.userId);
 
     return { success: true };
+  });
+
+  // 6. 修改个人资料
+  app.post('/api/v1/auth/update-profile', async (request, reply) => {
+    if (!request.userId) {
+      return reply.status(401).send({ error: 'UNAUTHORIZED', message: '请先登录' });
+    }
+
+    const updateProfileSchema = z.object({
+      username: z.string().trim().toLowerCase().min(2).max(30).regex(/^[a-zA-Z0-9_-]+$/).optional(),
+      displayName: z.string().trim().min(1).max(50).optional(),
+      avatar: z.string().nullable().optional(),
+    });
+
+    const { username, displayName, avatar } = updateProfileSchema.parse(request.body);
+
+    // 如果修改了用户名，需要检查是否与其他用户冲突
+    if (username) {
+      const existing = app.db.prepare('SELECT id FROM users WHERE username = ? AND id != ?').get(username, request.userId);
+      if (existing) {
+        return reply.status(409).send({ error: 'USERNAME_EXISTS', message: '用户名已被占用' });
+      }
+    }
+
+    const updates: string[] = [];
+    const params: any[] = [];
+
+    if (username !== undefined) {
+      updates.push('username = ?');
+      params.push(username);
+    }
+    if (displayName !== undefined) {
+      updates.push('display_name = ?');
+      params.push(displayName);
+    }
+    if (avatar !== undefined) {
+      updates.push('avatar = ?');
+      params.push(avatar);
+    }
+
+    if (updates.length > 0) {
+      updates.push('updated_at = ?');
+      params.push(nowIso());
+
+      params.push(request.userId);
+
+      app.db.prepare(`
+        UPDATE users
+        SET ${updates.join(', ')}
+        WHERE id = ?
+      `).run(...params);
+    }
+
+    // 获取并返回最新的用户信息
+    const user = app.db.prepare('SELECT id, username, display_name, avatar FROM users WHERE id = ?').get(request.userId) as any;
+
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        username: user.username,
+        displayName: user.display_name,
+        avatar: user.avatar,
+      },
+    };
   });
 }

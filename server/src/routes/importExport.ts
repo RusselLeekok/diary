@@ -46,7 +46,8 @@ const importSchema = z.object({
 export async function registerImportExportRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/v1/export/json', async (request) => {
     const userId = request.userId!;
-    const entries = getAllEntries(app, userId);
+    const { startDate, endDate } = (request.query as { startDate?: string; endDate?: string }) || {};
+    const entries = getAllEntries(app, userId, startDate, endDate);
     const categories = getAllCategories(app, userId);
     const settings = app.db.prepare(`
       SELECT theme, font_size, auto_save_interval
@@ -73,7 +74,8 @@ export async function registerImportExportRoutes(app: FastifyInstance): Promise<
 
   app.get('/api/v1/export/markdown', async (request, reply) => {
     const userId = request.userId!;
-    const entries = getAllEntries(app, userId);
+    const { startDate, endDate } = (request.query as { startDate?: string; endDate?: string }) || {};
+    const entries = getAllEntries(app, userId, startDate, endDate);
     const lines: string[] = [];
     for (const entry of entries) {
       lines.push(`# ${entry.title || '无标题'}`);
@@ -167,14 +169,27 @@ export async function registerImportExportRoutes(app: FastifyInstance): Promise<
   });
 }
 
-function getAllEntries(app: FastifyInstance, userId: string) {
-  const rows = app.db.prepare(`
+function getAllEntries(app: FastifyInstance, userId: string, startDate?: string, endDate?: string) {
+  let query = `
     SELECT e.*, c.name AS category_name
     FROM entries e
     LEFT JOIN categories c ON c.id = e.category_id
     WHERE e.user_id = ? AND e.is_deleted = 0
-    ORDER BY e.date_for DESC, e.time_for DESC, e.updated_at DESC
-  `).all(userId) as unknown as EntryRow[];
+  `;
+  const params: any[] = [userId];
+
+  if (startDate) {
+    query += ' AND e.date_for >= ?';
+    params.push(startDate);
+  }
+  if (endDate) {
+    query += ' AND e.date_for <= ?';
+    params.push(endDate);
+  }
+
+  query += ' ORDER BY e.date_for DESC, e.time_for DESC, e.updated_at DESC';
+
+  const rows = app.db.prepare(query).all(...params) as unknown as EntryRow[];
   return rows.map(rowToEntry);
 }
 

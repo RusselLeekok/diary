@@ -163,7 +163,7 @@ function bindPageEvents(container: HTMLElement, trashed: DiaryEntrySummary[]): v
         upsertEntrySummarySnapshot({ ...entry, isDeleted: false, updatedAt: new Date().toISOString() });
       }
       removeTrashCard(container, id, trashed);
-      showToast('日记已恢复 ✓', { type: 'success' });
+      showToast('日记已恢复', { type: 'success' });
       void restoreEntry(id)
         .then(() => refreshEntrySummaries())
         .catch(async error => {

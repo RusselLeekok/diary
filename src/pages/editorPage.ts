@@ -734,7 +734,7 @@ function bindEditorEvents(
         return;
       }
       clearAutoSave();
-      showToast('日记已保存 ✓', { type: 'success' });
+      showToast('日记已保存', { type: 'success' });
       if (savedEntry && savedEntry.id) {
         navigate('view', { id: savedEntry.id });
       } else {

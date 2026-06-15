@@ -304,8 +304,12 @@ export async function setConfigItem(key: string, value: unknown): Promise<void> 
   }
 }
 
-export async function exportData(): Promise<string> {
-  const data = await apiRequest<unknown>('/export/json');
+export async function exportData(startDate?: string, endDate?: string): Promise<string> {
+  const params = new URLSearchParams();
+  if (startDate) params.set('startDate', startDate);
+  if (endDate) params.set('endDate', endDate);
+  const queryStr = params.toString() ? `?${params.toString()}` : '';
+  const data = await apiRequest<unknown>(`/export/json${queryStr}`);
   return JSON.stringify(data, null, 2);
 }
 

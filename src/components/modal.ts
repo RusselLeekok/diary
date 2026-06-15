@@ -23,8 +23,8 @@ export function showModal(options: ModalOptions): void {
     onCancel,
   } = options;
 
-  // 移除旧的模态框
-  document.querySelector('.modal-overlay')?.remove();
+  // 只移除旧的通用确认框，避免嵌套确认时误删业务弹窗。
+  document.querySelector('.modal-overlay:not(.cat-modal-overlay)')?.remove();
 
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';

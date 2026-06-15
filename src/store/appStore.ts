@@ -395,13 +395,37 @@ export async function deleteCategory(name: string): Promise<void> {
   name = name.trim();
   if (!name) return;
 
-  // 1. 从后端删除分类，后端会把相关日记置为未分类
-  await deleteCategoryByName(name);
+  const previousCategories = [...(state.config.categories || [])];
+  const previousSummaries = state.allEntries;
 
-  // 2. 更新本地 config.categories 快照
-  let categories = state.config.categories || [];
-  categories = categories.filter(c => c !== name);
-  state.config.categories = categories;
+  // 先做本地乐观更新，让管理弹窗和分类侧栏立即反馈。
+  state.config.categories = previousCategories.filter(c => c !== name);
+  state.allEntries = state.allEntries.map(entry => (
+    entry.tags.includes(name)
+      ? { ...entry, tags: entry.tags.filter(tag => tag !== name) }
+      : entry
+  ));
+  state.fullEntryCache.forEach((entry, id) => {
+    if (entry.tags.includes(name)) {
+      state.fullEntryCache.set(id, {
+        ...entry,
+        tags: entry.tags.filter(tag => tag !== name),
+      });
+    }
+  });
+  refreshTags();
+  persistEntrySummariesCache();
 
-  await refreshEntrySummaries();
+  try {
+    // 后端会把相关日记置为未分类；完成后再用服务端数据校准。
+    await deleteCategoryByName(name);
+    await refreshEntrySummaries();
+  } catch (error) {
+    state.config.categories = previousCategories;
+    state.allEntries = previousSummaries;
+    state.fullEntryCache.clear();
+    refreshTags();
+    persistEntrySummariesCache();
+    throw error;
+  }
 }

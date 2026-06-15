@@ -4,6 +4,7 @@ import { getAppConfig, updateConfig } from '../store/appStore';
 import { getCurrentUser, logout } from '../store/authStore';
 import { showToast } from './toast';
 import { clearListFilters } from '../pages/listPage';
+import { getPresetAvatarSvg } from '../utils/avatarUtils';
 
 // 导航项配置
 const NAV_ITEMS: { page: PageName; icon: string; label: string }[] = [
@@ -45,6 +46,17 @@ const NAV_ITEMS: { page: PageName; icon: string; label: string }[] = [
   },
 ];
 
+function renderAvatar(user: any): string {
+  if (!user.avatar) {
+    return `<div class="user-avatar">${(user.displayName || user.username || 'U').charAt(0).toUpperCase()}</div>`;
+  }
+  if (user.avatar.startsWith('avatar:')) {
+    const index = parseInt(user.avatar.split(':')[1], 10);
+    return `<div class="user-avatar user-avatar-preset">${getPresetAvatarSvg(index)}</div>`;
+  }
+  return `<div class="user-avatar user-avatar-custom" style="background-image: url(${user.avatar})"></div>`;
+}
+
 /** 渲染顶部导航栏 */
 export function renderTopbar(container: HTMLElement): void {
   const isDark = getAppConfig().theme === 'dark' ||
@@ -56,7 +68,7 @@ export function renderTopbar(container: HTMLElement): void {
     ? `
       <div class="topbar-user-menu" id="topbar-user-menu">
         <button class="topbar-user-btn" aria-label="用户菜单" aria-haspopup="true">
-          <div class="user-avatar">${(user.displayName || user.username || 'U').charAt(0).toUpperCase()}</div>
+          ${renderAvatar(user)}
           <span class="user-name">${user.displayName || user.username}</span>
         </button>
         <div class="user-dropdown-menu" role="menu">

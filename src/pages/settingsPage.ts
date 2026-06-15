@@ -1,14 +1,63 @@
 import { getAppConfig, updateConfig } from '../store/appStore';
-import { clearAllEntries, getAllEntries } from '../services/databaseService';
-import { exportAsJson, exportAsMarkdown, importFromJson } from '../utils/exportUtils';
+import { clearAllEntries, getAllEntries, filterEntries, importData, exportData } from '../services/databaseService';
+import { exportAsMarkdown } from '../utils/exportUtils';
 import { showToast } from '../components/toast';
-import { showModal, showInputModal } from '../components/modal';
+import { showModal } from '../components/modal';
 import { navigate } from '../router/router';
-import { getCurrentUser, changePassword } from '../store/authStore';
+import { getCurrentUser, changePassword, updateProfile } from '../store/authStore';
+import { getPresetAvatarSvg } from '../utils/avatarUtils';
+import { renderTopbar } from '../components/sidebar';
+import { today } from '../utils/dateUtils';
+
+/** 格式化日期为 YYYY-MM-DD */
+function formatDateString(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/** 获取 N 天前的日期 YYYY-MM-DD */
+function getNDaysAgo(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return formatDateString(d);
+}
+
+/** 渲染顶部欢迎卡片的头像 */
+function renderBannerAvatar(avatar: string | null | undefined, displayName: string, username: string): string {
+  if (!avatar) {
+    return `<div class="avatar-svg-container" style="background:var(--accent-bg);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:1.8rem;font-weight:500;font-family:var(--font-content)">${(displayName || username || 'U').charAt(0).toUpperCase()}</div>`;
+  }
+  if (avatar.startsWith('avatar:')) {
+    const idx = parseInt(avatar.split(':')[1], 10);
+    return `<div class="avatar-svg-container">${getPresetAvatarSvg(idx)}</div>`;
+  }
+  return `<div class="avatar-svg-container" style="background-image:url(${avatar});background-size:cover;background-position:center;width:100%;height:100%"></div>`;
+}
+
+/** 下载文本文件 */
+function downloadTextFile(content: string, filename: string, mimeType = 'text/plain;charset=utf-8'): void {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 /** 设置页面 */
 export async function renderSettingsPage(mainEl: HTMLElement): Promise<void> {
   const config = getAppConfig();
+  const user = getCurrentUser();
+
+  // 根据时间获得问候语
+  const hour = new Date().getHours();
+  let greeting = '晚上好';
+  if (hour >= 5 && hour < 11) greeting = '早上好';
+  else if (hour >= 11 && hour < 13) greeting = '中午好';
+  else if (hour >= 13 && hour < 18) greeting = '下午好';
 
   mainEl.innerHTML = `
     <div class="page-settings">
@@ -16,11 +65,92 @@ export async function renderSettingsPage(mainEl: HTMLElement): Promise<void> {
         <h1 class="page-title">设置</h1>
       </div>
 
+      <!-- 个人资料欢迎 Banner -->
+      <div class="settings-greeting-card">
+        <div class="settings-greeting-left">
+          <div class="settings-avatar-wrap" id="banner-avatar-wrap" title="点击更换头像">
+            ${renderBannerAvatar(user?.avatar, user?.displayName || '', user?.username || '')}
+            <div class="avatar-edit-overlay">更换头像</div>
+          </div>
+          <div class="settings-greeting-info">
+            <span class="greeting-text">${greeting}，${user?.displayName || user?.username || '用户'}</span>
+            <span class="user-meta-text">ID: @${user?.username || ''} ${user?.createdAt ? `| 加入时间: ${user.createdAt.substring(0, 10)}` : ''}</span>
+          </div>
+        </div>
+        <div class="settings-greeting-actions">
+          <button class="btn btn-ghost" id="edit-profile-btn">修改个人资料</button>
+        </div>
+      </div>
+
+      <!-- 个人资料修改面板 (默认隐藏) -->
+      <div class="profile-edit-panel" id="profile-edit-panel">
+        <div class="profile-edit-title">
+          <svg class="settings-sec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          修改个人资料
+        </div>
+        
+        <div class="profile-edit-content">
+          <!-- 头像选择 -->
+          <div>
+            <span class="avatar-selector-label">选择个人头像</span>
+            <div class="avatar-grid" id="profile-avatar-grid">
+              <div class="avatar-option avatar-empty-option" data-avatar="" title="使用昵称首字">
+                <span>${(user?.displayName || user?.username || 'U').charAt(0).toUpperCase()}</span>
+              </div>
+              <div class="avatar-option" data-avatar="avatar:1">${getPresetAvatarSvg(1)}</div>
+              <div class="avatar-option" data-avatar="avatar:2">${getPresetAvatarSvg(2)}</div>
+              <div class="avatar-option" data-avatar="avatar:3">${getPresetAvatarSvg(3)}</div>
+              <div class="avatar-option" data-avatar="avatar:4">${getPresetAvatarSvg(4)}</div>
+              <div class="avatar-option" data-avatar="avatar:5">${getPresetAvatarSvg(5)}</div>
+              <div class="avatar-option" data-avatar="avatar:6">${getPresetAvatarSvg(6)}</div>
+              <div class="avatar-option" data-avatar="avatar:7">${getPresetAvatarSvg(7)}</div>
+              <div class="avatar-option" data-avatar="avatar:8">${getPresetAvatarSvg(8)}</div>
+              <div class="avatar-option avatar-upload-option" id="avatar-upload-trigger" title="上传本地图片">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <input type="file" id="avatar-file-input" accept="image/*" style="display:none" />
+              </div>
+            </div>
+          </div>
+          
+          <!-- 表单项 -->
+          <div class="profile-form-grid">
+            <div class="form-group-settings">
+              <label for="edit-display-name">用户昵称</label>
+              <input type="text" class="input-settings" id="edit-display-name" value="${user?.displayName || ''}" placeholder="请输入昵称" />
+            </div>
+            <div class="form-group-settings">
+              <label for="edit-username">用户ID (用于登录/唯一标记)</label>
+              <input type="text" class="input-settings" id="edit-username" value="${user?.username || ''}" placeholder="请输入只包含字母/数字/下划线的账号" />
+            </div>
+          </div>
+          
+          <div class="profile-edit-actions">
+            <button class="btn btn-ghost" id="cancel-profile-btn">取消</button>
+            <button class="btn btn-primary" id="save-profile-btn">保存修改</button>
+          </div>
+        </div>
+      </div>
+
       <div class="settings-sections">
 
         <!-- 外观 -->
         <section class="settings-section">
-          <h2 class="settings-section-title">🎨 外观</h2>
+          <div class="settings-section-title-wrap">
+            <svg class="settings-sec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 14.7255 3.09032 17.1962 4.85857 19C5.02874 19.1702 5.27506 19.2272 5.50085 19.1482C7.5492 18.4323 8.35825 16.5 10 16.5C11.6417 16.5 12.5 17.5 13.5 18.5C14.5 19.5 15 20.5 14 21.5C13.3853 22.1147 12.65 22 12 22Z"></path>
+              <circle cx="7.5" cy="10.5" r="1" fill="currentColor"></circle>
+              <circle cx="11.5" cy="7.5" r="1" fill="currentColor"></circle>
+              <circle cx="16.5" cy="9.5" r="1" fill="currentColor"></circle>
+              <circle cx="15.5" cy="14.5" r="1" fill="currentColor"></circle>
+            </svg>
+            <h2 class="settings-section-title">外观</h2>
+          </div>
           <div class="settings-item">
             <div class="settings-item-info">
               <span class="settings-item-label">主题配色</span>
@@ -69,39 +199,74 @@ export async function renderSettingsPage(mainEl: HTMLElement): Promise<void> {
 
         <!-- 账户安全 -->
         <section class="settings-section">
-          <h2 class="settings-section-title">🔒 账户安全</h2>
-          <div class="settings-item">
-            <div class="settings-item-info">
-              <span class="settings-item-label">当前账户</span>
-              <span class="settings-item-desc">当前登录用户：${getCurrentUser()?.displayName || getCurrentUser()?.username || '未登录'}</span>
+          <div class="settings-section-title-wrap">
+            <svg class="settings-sec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <h2 class="settings-section-title">账户安全</h2>
+          </div>
+          <div class="settings-item" style="flex-direction:column;align-items:flex-start;gap:12px;">
+            <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
+              <div class="settings-item-info">
+                <span class="settings-item-label">登录密码更改</span>
+                <span class="settings-item-desc">定期更改强密码可有效保护个人日记隐私</span>
+              </div>
+              <div class="settings-item-actions">
+                <button class="btn btn-ghost" id="change-pwd-btn">修改密码</button>
+              </div>
             </div>
-            <div class="settings-item-actions">
-              <button class="btn btn-ghost" id="change-pwd-btn">修改密码</button>
+            
+            <!-- 就地更改密码面板 (默认隐藏) -->
+            <div class="password-panel-wrap" id="pwd-edit-panel" style="display:none;width:100%;margin-top:8px;border-top:1.5px dashed var(--border-light);padding-top:16px;">
+              <div class="form-group-settings" style="margin-bottom:12px;">
+                <label for="edit-old-pwd">当前旧密码</label>
+                <input type="password" class="input-settings" id="edit-old-pwd" placeholder="请输入当前旧密码" />
+              </div>
+              <div class="form-group-settings" style="margin-bottom:12px;">
+                <label for="edit-new-pwd">新密码（至少6位）</label>
+                <input type="password" class="input-settings" id="edit-new-pwd" placeholder="请输入新密码" />
+              </div>
+              <div class="form-group-settings" style="margin-bottom:16px;">
+                <label for="edit-confirm-pwd">确认新密码</label>
+                <input type="password" class="input-settings" id="edit-confirm-pwd" placeholder="请再次输入新密码" />
+              </div>
+              <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-ghost btn-sm" id="cancel-pwd-btn">取消</button>
+                <button class="btn btn-primary btn-sm" id="save-pwd-btn">保存新密码</button>
+              </div>
             </div>
           </div>
         </section>
 
         <!-- 数据管理 -->
         <section class="settings-section">
-          <h2 class="settings-section-title">💾 数据管理</h2>
+          <div class="settings-section-title-wrap">
+            <svg class="settings-sec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+              <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+              <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"></path>
+            </svg>
+            <h2 class="settings-section-title">数据管理</h2>
+          </div>
           <div class="settings-item">
             <div class="settings-item-info">
-              <span class="settings-item-label">导出数据（JSON）</span>
-              <span class="settings-item-desc">导出所有日记和配置，可用于备份和恢复</span>
+              <span class="settings-item-label">导出数据（JSON备份）</span>
+              <span class="settings-item-desc">导出所有日记和配置，可用于备份和恢复，支持按日期过滤</span>
             </div>
             <button class="btn btn-ghost" id="export-json-btn">📥 导出</button>
           </div>
           <div class="settings-item">
             <div class="settings-item-info">
               <span class="settings-item-label">导出为 Markdown</span>
-              <span class="settings-item-desc">将所有日记导出为可读的 Markdown 文件</span>
+              <span class="settings-item-desc">将日记导出为可读的 Markdown 文件，支持按日期过滤</span>
             </div>
             <button class="btn btn-ghost" id="export-md-btn">📄 导出</button>
           </div>
           <div class="settings-item">
             <div class="settings-item-info">
               <span class="settings-item-label">导入数据</span>
-              <span class="settings-item-desc">从 JSON 备份文件恢复数据（不会覆盖现有数据）</span>
+              <span class="settings-item-desc">从 JSON 备份文件恢复数据（支持过滤特定时间段导入）</span>
             </div>
             <label class="btn btn-ghost" for="import-file-input" style="cursor:pointer">📤 导入</label>
             <input type="file" id="import-file-input" accept=".json" style="display:none" />
@@ -117,13 +282,20 @@ export async function renderSettingsPage(mainEl: HTMLElement): Promise<void> {
 
         <!-- 关于 -->
         <section class="settings-section">
-          <h2 class="settings-section-title">ℹ️ 关于</h2>
+          <div class="settings-section-title-wrap">
+            <svg class="settings-sec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            <h2 class="settings-section-title">关于</h2>
+          </div>
           <div class="about-card">
             <div class="about-logo">📔</div>
             <div class="about-info">
               <p class="about-name">我的日记</p>
-              <p class="about-version">版本 1.0.0</p>
-              <p class="about-desc">一款简洁、私密的个人日记应用。所有数据存储在您的浏览器本地，不上传服务器。</p>
+              <p class="about-version">版本 1.1.0</p>
+              <p class="about-desc">一款简洁、私密的个人日记应用。所有数据存储在您的浏览器本地，不上传外部服务器。</p>
             </div>
           </div>
         </section>
@@ -131,11 +303,195 @@ export async function renderSettingsPage(mainEl: HTMLElement): Promise<void> {
     </div>
   `;
 
-  bindSettingsEvents(mainEl);
+  bindSettingsEvents(mainEl, mainEl);
 }
 
-function bindSettingsEvents(container: HTMLElement): void {
-  // 主题切换
+function bindSettingsEvents(container: HTMLElement, mainEl: HTMLElement): void {
+  const user = getCurrentUser();
+  let tempAvatar = user?.avatar || null;
+
+  // 1. 头像选择逻辑交互
+  const profilePanel = container.querySelector('#profile-edit-panel') as HTMLElement;
+  const avatarOptions = container.querySelectorAll('#profile-avatar-grid .avatar-option');
+  const bannerAvatarWrap = container.querySelector('#banner-avatar-wrap') as HTMLElement;
+  const displayNameInput = container.querySelector('#edit-display-name') as HTMLInputElement;
+  const usernameInput = container.querySelector('#edit-username') as HTMLInputElement;
+
+  const renderCurrentAvatarPreview = () => {
+    const displayName = displayNameInput?.value.trim() || getCurrentUser()?.displayName || '';
+    const username = usernameInput?.value.trim() || getCurrentUser()?.username || '';
+    const emptyAvatarText = container.querySelector('.avatar-empty-option span') as HTMLElement | null;
+    if (emptyAvatarText) {
+      emptyAvatarText.textContent = (displayName || username || 'U').charAt(0).toUpperCase();
+    }
+    if (bannerAvatarWrap) {
+      bannerAvatarWrap.innerHTML = `
+        ${renderBannerAvatar(tempAvatar, displayName, username)}
+        <div class="avatar-edit-overlay">更换头像</div>
+      `;
+    }
+  };
+  
+  // 初始化已选中状态
+  const initAvatarSelection = () => {
+    avatarOptions.forEach(opt => {
+      opt.classList.remove('active');
+      if (opt.id === 'avatar-upload-trigger') return;
+      const avatarVal = (opt as HTMLElement).dataset.avatar;
+      if ((avatarVal || null) === tempAvatar) {
+        opt.classList.add('active');
+      }
+    });
+
+    const trigger = container.querySelector('#avatar-upload-trigger') as HTMLElement;
+    if (tempAvatar && !tempAvatar.startsWith('avatar:')) {
+      trigger.style.backgroundImage = `url(${tempAvatar})`;
+      trigger.style.backgroundSize = 'cover';
+      trigger.style.backgroundPosition = 'center';
+      trigger.classList.add('active');
+    } else {
+      trigger.style.backgroundImage = '';
+      trigger.classList.remove('active');
+    }
+  };
+
+  // 点击预设头像
+  avatarOptions.forEach(opt => {
+    if (opt.id === 'avatar-upload-trigger') return;
+    opt.addEventListener('click', () => {
+      avatarOptions.forEach(o => o.classList.remove('active'));
+      opt.classList.add('active');
+      tempAvatar = (opt as HTMLElement).dataset.avatar || null;
+      renderCurrentAvatarPreview();
+    });
+  });
+
+  // 点击自定义头像上传
+  const fileInput = container.querySelector('#avatar-file-input') as HTMLInputElement;
+  const uploadTrigger = container.querySelector('#avatar-upload-trigger');
+  uploadTrigger?.addEventListener('click', (e) => {
+    // 防止触发 grid item 上的其他事件
+    e.stopPropagation();
+    fileInput.click();
+  });
+
+  fileInput?.addEventListener('change', () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showToast('只能上传图片文件', { type: 'error' });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.src = e.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 120;
+        canvas.height = 120;
+        const ctx = canvas.getContext('2d')!;
+
+        // 居中裁切成 120x120 像素
+        const minSize = Math.min(img.width, img.height);
+        const sx = (img.width - minSize) / 2;
+        const sy = (img.height - minSize) / 2;
+        ctx.drawImage(img, sx, sy, minSize, minSize, 0, 0, 120, 120);
+
+        // 压缩生成 jpeg 格式 Base64
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        tempAvatar = compressedDataUrl;
+
+        // 更新 UI 展示
+        const trigger = container.querySelector('#avatar-upload-trigger') as HTMLElement;
+        trigger.style.backgroundImage = `url(${compressedDataUrl})`;
+        trigger.style.backgroundSize = 'cover';
+        trigger.style.backgroundPosition = 'center';
+
+        avatarOptions.forEach(o => o.classList.remove('active'));
+        trigger.classList.add('active');
+        renderCurrentAvatarPreview();
+      };
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // 展开和收起修改资料面板
+  const editProfileBtn = container.querySelector('#edit-profile-btn');
+  const cancelProfileBtn = container.querySelector('#cancel-profile-btn');
+  const saveProfileBtn = container.querySelector('#save-profile-btn');
+  displayNameInput?.addEventListener('input', () => {
+    if (!tempAvatar) renderCurrentAvatarPreview();
+  });
+  usernameInput?.addEventListener('input', () => {
+    if (!tempAvatar) renderCurrentAvatarPreview();
+  });
+
+  const toggleProfilePanel = (show: boolean) => {
+    if (show) {
+      tempAvatar = getCurrentUser()?.avatar || null;
+      initAvatarSelection();
+      renderCurrentAvatarPreview();
+      profilePanel.style.display = 'block';
+    } else {
+      profilePanel.style.display = 'none';
+    }
+  };
+
+  editProfileBtn?.addEventListener('click', () => toggleProfilePanel(profilePanel.style.display !== 'block'));
+  bannerAvatarWrap?.addEventListener('click', () => toggleProfilePanel(true));
+  cancelProfileBtn?.addEventListener('click', () => toggleProfilePanel(false));
+
+  saveProfileBtn?.addEventListener('click', async () => {
+    const nextDisplayName = (container.querySelector('#edit-display-name') as HTMLInputElement).value.trim();
+    const nextUsername = (container.querySelector('#edit-username') as HTMLInputElement).value.trim().toLowerCase();
+
+    if (!nextDisplayName) {
+      showToast('昵称不能为空', { type: 'error' });
+      return;
+    }
+    if (!nextUsername) {
+      showToast('用户ID不能为空', { type: 'error' });
+      return;
+    }
+    if (!/^[a-zA-Z0-9_-]+$/.test(nextUsername)) {
+      showToast('用户ID仅支持英文字母、数字和下划线/减号', { type: 'error' });
+      return;
+    }
+    if (nextUsername.length < 2 || nextUsername.length > 30) {
+      showToast('用户ID长度需在 2 到 30 位之间', { type: 'error' });
+      return;
+    }
+
+    try {
+      await updateProfile({
+        displayName: nextDisplayName,
+        username: nextUsername,
+        avatar: tempAvatar,
+      });
+
+      showToast('个人资料保存成功', { type: 'success' });
+      
+      // 刷新本页以同步欢迎文案和头像
+      await renderSettingsPage(mainEl);
+
+      // 刷新顶部导航栏
+      const topbarEl = document.getElementById('app-topbar');
+      if (topbarEl) {
+        renderTopbar(topbarEl);
+      }
+    } catch (err: any) {
+      if (err?.error === 'USERNAME_EXISTS') {
+        showToast('该用户ID已被其他账号占用', { type: 'error' });
+      } else {
+        showToast(err?.message || '个人资料更新失败', { type: 'error' });
+      }
+    }
+  });
+
+  // 2. 主题切换
   container.querySelectorAll('.theme-picker-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       const theme = (btn as HTMLElement).dataset.theme as any;
@@ -171,7 +527,7 @@ function bindSettingsEvents(container: HTMLElement): void {
     });
   });
 
-  // 字体大小切换
+  // 3. 字体大小切换
   container.querySelectorAll('.font-size-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       const size = (btn as HTMLElement).dataset.size as 'sm' | 'md' | 'lg' | 'xl';
@@ -184,61 +540,397 @@ function bindSettingsEvents(container: HTMLElement): void {
     });
   });
 
-  // 修改密码
-  container.querySelector('#change-pwd-btn')?.addEventListener('click', () => {
-    showInputModal({
-      title: '修改密码：请输入旧密码',
-      placeholder: '请输入旧密码',
-      inputType: 'password',
-      confirmText: '下一步',
-      onConfirm: async (oldPwd) => {
-        if (!oldPwd) { showToast('旧密码不能为空', { type: 'error' }); return; }
+  // 4. 就地更改密码交互逻辑
+  const changePwdBtn = container.querySelector('#change-pwd-btn');
+  const pwdPanel = container.querySelector('#pwd-edit-panel') as HTMLElement;
+  const cancelPwdBtn = container.querySelector('#cancel-pwd-btn');
+  const savePwdBtn = container.querySelector('#save-pwd-btn');
 
-        showInputModal({
-          title: '修改密码：请输入新密码',
-          placeholder: '请输入新密码（至少6位）',
-          inputType: 'password',
-          confirmText: '确认修改',
-          onConfirm: async (newPwd) => {
-            if (newPwd.length < 6) { showToast('新密码至少需要6位', { type: 'error' }); return; }
-            try {
-              await changePassword(oldPwd, newPwd);
-              showToast('密码修改成功', { type: 'success' });
-            } catch (err: any) {
-              showToast(err?.message || '密码修改失败', { type: 'error' });
-            }
-          }
-        });
-      }
-    });
-  });
+  const oldPwdInput = container.querySelector('#edit-old-pwd') as HTMLInputElement;
+  const newPwdInput = container.querySelector('#edit-new-pwd') as HTMLInputElement;
+  const confirmPwdInput = container.querySelector('#edit-confirm-pwd') as HTMLInputElement;
 
-  // 导出 JSON
-  container.querySelector('#export-json-btn')?.addEventListener('click', async () => {
-    await exportAsJson();
-    showToast('已开始下载 JSON 备份', { type: 'success' });
-  });
-
-  // 导出 Markdown
-  container.querySelector('#export-md-btn')?.addEventListener('click', async () => {
-    const entries = await getAllEntries();
-    await exportAsMarkdown(entries);
-    showToast('已开始下载 Markdown 文件', { type: 'success' });
-  });
-
-  // 导入文件
-  container.querySelector('#import-file-input')?.addEventListener('change', async (e) => {
-    const file = (e.target as HTMLInputElement).files?.[0];
-    if (!file) return;
-    try {
-      const result = await importFromJson(file);
-      showToast(`成功导入 ${result.count} 篇日记`, { type: 'success' });
-    } catch {
-      showToast('导入失败，请检查文件格式', { type: 'error' });
+  changePwdBtn?.addEventListener('click', () => {
+    if (pwdPanel.style.display === 'block') {
+      pwdPanel.style.display = 'none';
+    } else {
+      oldPwdInput.value = '';
+      newPwdInput.value = '';
+      confirmPwdInput.value = '';
+      pwdPanel.style.display = 'block';
+      pwdPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   });
 
-  // 清空所有数据
+  cancelPwdBtn?.addEventListener('click', () => {
+    pwdPanel.style.display = 'none';
+  });
+
+  savePwdBtn?.addEventListener('click', async () => {
+    const oldPwd = oldPwdInput.value;
+    const newPwd = newPwdInput.value;
+    const confirmPwd = confirmPwdInput.value;
+
+    if (!oldPwd) {
+      showToast('请输入当前旧密码', { type: 'error' });
+      return;
+    }
+    if (newPwd.length < 6) {
+      showToast('新密码至少需要 6 位字符', { type: 'error' });
+      return;
+    }
+    if (newPwd !== confirmPwd) {
+      showToast('两次输入的新密码不一致', { type: 'error' });
+      return;
+    }
+
+    try {
+      await changePassword(oldPwd, newPwd);
+      showToast('密码修改成功', { type: 'success' });
+      pwdPanel.style.display = 'none';
+      oldPwdInput.value = '';
+      newPwdInput.value = '';
+      confirmPwdInput.value = '';
+    } catch (err: any) {
+      showToast(err?.message || '密码修改失败，请检查旧密码是否正确', { type: 'error' });
+    }
+  });
+
+  // 5. 导出 JSON 支持选择日期
+  container.querySelector('#export-json-btn')?.addEventListener('click', () => {
+    const customId = `export-json-dates-${Math.floor(Math.random() * 1000)}`;
+    const startId = `start-${customId}`;
+    const endId = `end-${customId}`;
+
+    showModal({
+      title: '导出数据（JSON备份）',
+      content: `
+        <div class="modal-info-box">导出包含所有日记和配置的 JSON 备份包。可用于在其他浏览器中恢复。</div>
+        <div class="export-modal-options" id="export-json-options">
+          <div class="export-modal-option active" data-range="all">
+            <span class="export-modal-option-radio"></span>
+            导出全部日记
+          </div>
+          <div class="export-modal-option" data-range="7days">
+            <span class="export-modal-option-radio"></span>
+            导出最近 7 天的日记
+          </div>
+          <div class="export-modal-option" data-range="30days">
+            <span class="export-modal-option-radio"></span>
+            导出最近 30 天的日记
+          </div>
+          <div class="export-modal-option" data-range="thisyear">
+            <span class="export-modal-option-radio"></span>
+            导出今年日记（2026年）
+          </div>
+          <div class="export-modal-option" data-range="custom">
+            <span class="export-modal-option-radio"></span>
+            自定义日期范围
+          </div>
+          <div class="custom-date-section" id="custom-container-${customId}">
+            <div class="date-picker-row">
+              <input type="date" class="input-settings" id="${startId}" value="${getNDaysAgo(30)}" />
+              <span>至</span>
+              <input type="date" class="input-settings" id="${endId}" value="${today()}" />
+            </div>
+          </div>
+        </div>
+      `,
+      confirmText: '确认导出',
+      onConfirm: async () => {
+        const modalEl = document.querySelector('.modal-overlay') as HTMLElement;
+        const activeOption = modalEl.querySelector('.export-modal-option.active') as HTMLElement;
+        const range = activeOption?.dataset.range || 'all';
+
+        let startDate: string | undefined;
+        let endDate: string | undefined;
+
+        if (range === '7days') {
+          startDate = getNDaysAgo(6);
+          endDate = today();
+        } else if (range === '30days') {
+          startDate = getNDaysAgo(29);
+          endDate = today();
+        } else if (range === 'thisyear') {
+          startDate = '2026-01-01';
+          endDate = '2026-12-31';
+        } else if (range === 'custom') {
+          startDate = (modalEl.querySelector(`#${startId}`) as HTMLInputElement).value;
+          endDate = (modalEl.querySelector(`#${endId}`) as HTMLInputElement).value;
+        }
+
+        try {
+          const data = await exportData(startDate, endDate);
+          const dateLabel = range === 'all' ? today() : `${startDate}_to_${endDate}`;
+          downloadTextFile(data, `diary-backup-${dateLabel}.json`, 'application/json;charset=utf-8');
+          showToast('已开始下载备份 JSON 文件', { type: 'success' });
+        } catch (err: any) {
+          showToast(err?.message || '导出 JSON 失败', { type: 'error' });
+        }
+      }
+    });
+
+    // 绑定导出 Modal 内部事件
+    setTimeout(() => {
+      const modalEl = document.querySelector('.modal-overlay') as HTMLElement;
+      if (!modalEl) return;
+
+      const options = modalEl.querySelectorAll('.export-modal-option');
+      const customContainer = modalEl.querySelector(`#custom-container-${customId}`) as HTMLElement;
+
+      options.forEach(opt => {
+        opt.addEventListener('click', () => {
+          options.forEach(o => o.classList.remove('active'));
+          opt.classList.add('active');
+          const range = (opt as HTMLElement).dataset.range;
+          if (range === 'custom') {
+            customContainer.classList.add('active');
+          } else {
+            customContainer.classList.remove('active');
+          }
+        });
+      });
+    }, 50);
+  });
+
+  // 6. 导出 Markdown 支持选择日期
+  container.querySelector('#export-md-btn')?.addEventListener('click', () => {
+    const customId = `export-md-dates-${Math.floor(Math.random() * 1000)}`;
+    const startId = `start-${customId}`;
+    const endId = `end-${customId}`;
+
+    showModal({
+      title: '导出为 Markdown',
+      content: `
+        <div class="modal-info-box">将您的日记文章导出为便于阅读和在外部编辑器排版的 Markdown 格式文本。</div>
+        <div class="export-modal-options">
+          <div class="export-modal-option active" data-range="all">
+            <span class="export-modal-option-radio"></span>
+            导出全部日记
+          </div>
+          <div class="export-modal-option" data-range="7days">
+            <span class="export-modal-option-radio"></span>
+            导出最近 7 天的日记
+          </div>
+          <div class="export-modal-option" data-range="30days">
+            <span class="export-modal-option-radio"></span>
+            导出最近 30 天的日记
+          </div>
+          <div class="export-modal-option" data-range="thisyear">
+            <span class="export-modal-option-radio"></span>
+            导出今年日记（2026年）
+          </div>
+          <div class="export-modal-option" data-range="custom">
+            <span class="export-modal-option-radio"></span>
+            自定义日期范围
+          </div>
+          <div class="custom-date-section" id="custom-container-${customId}">
+            <div class="date-picker-row">
+              <input type="date" class="input-settings" id="${startId}" value="${getNDaysAgo(30)}" />
+              <span>至</span>
+              <input type="date" class="input-settings" id="${endId}" value="${today()}" />
+            </div>
+          </div>
+        </div>
+      `,
+      confirmText: '确认导出',
+      onConfirm: async () => {
+        const modalEl = document.querySelector('.modal-overlay') as HTMLElement;
+        const activeOption = modalEl.querySelector('.export-modal-option.active') as HTMLElement;
+        const range = activeOption?.dataset.range || 'all';
+
+        let startDate: string | undefined;
+        let endDate: string | undefined;
+
+        if (range === '7days') {
+          startDate = getNDaysAgo(6);
+          endDate = today();
+        } else if (range === '30days') {
+          startDate = getNDaysAgo(29);
+          endDate = today();
+        } else if (range === 'thisyear') {
+          startDate = '2026-01-01';
+          endDate = '2026-12-31';
+        } else if (range === 'custom') {
+          startDate = (modalEl.querySelector(`#${startId}`) as HTMLInputElement).value;
+          endDate = (modalEl.querySelector(`#${endId}`) as HTMLInputElement).value;
+        }
+
+        try {
+          let entries = [];
+          if (range === 'all') {
+            entries = await getAllEntries();
+          } else {
+            entries = await filterEntries({ dateFrom: startDate, dateTo: endDate });
+          }
+
+          if (entries.length === 0) {
+            showToast('选定范围内没有任何日记条目，无法导出', { type: 'error' });
+            return;
+          }
+
+          await exportAsMarkdown(entries);
+          showToast('Markdown 文件下载已开始', { type: 'success' });
+        } catch (err: any) {
+          showToast(err?.message || '导出 Markdown 失败', { type: 'error' });
+        }
+      }
+    });
+
+    // 绑定 Markdown 导出 Modal 内部事件
+    setTimeout(() => {
+      const modalEl = document.querySelector('.modal-overlay') as HTMLElement;
+      if (!modalEl) return;
+
+      const options = modalEl.querySelectorAll('.export-modal-option');
+      const customContainer = modalEl.querySelector(`#custom-container-${customId}`) as HTMLElement;
+
+      options.forEach(opt => {
+        opt.addEventListener('click', () => {
+          options.forEach(o => o.classList.remove('active'));
+          opt.classList.add('active');
+          const range = (opt as HTMLElement).dataset.range;
+          if (range === 'custom') {
+            customContainer.classList.add('active');
+          } else {
+            customContainer.classList.remove('active');
+          }
+        });
+      });
+    }, 50);
+  });
+
+  // 7. 导入 JSON，读取文件并询问是否过滤日期
+  container.querySelector('#import-file-input')?.addEventListener('change', async (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const fileContent = event.target?.result as string;
+        const backupData = JSON.parse(fileContent);
+
+        if (!backupData || !Array.isArray(backupData.entries)) {
+          showToast('备份文件格式不正确（没有包含日记项）', { type: 'error' });
+          return;
+        }
+
+        const entries = backupData.entries;
+        if (entries.length === 0) {
+          showToast('该备份文件中不含任何日记', { type: 'error' });
+          return;
+        }
+
+        // 计算日期跨度
+        let minDate = entries[0].dateFor || '2026-01-01';
+        let maxDate = entries[0].dateFor || '2026-01-01';
+
+        for (const entry of entries) {
+          if (entry.dateFor) {
+            if (entry.dateFor < minDate) minDate = entry.dateFor;
+            if (entry.dateFor > maxDate) maxDate = entry.dateFor;
+          }
+        }
+
+        const customId = `import-filter-dates-${Math.floor(Math.random() * 1000)}`;
+        const startId = `start-${customId}`;
+        const endId = `end-${customId}`;
+
+        showModal({
+          title: '导入备份数据',
+          content: `
+            <div class="modal-info-box">
+              检测到该文件含有 <strong>${entries.length}</strong> 篇日记。<br>
+              日记时间跨度：<strong>${minDate}</strong> 至 <strong>${maxDate}</strong>。
+            </div>
+            <div class="export-modal-options">
+              <div class="export-modal-option active" data-range="all">
+                <span class="export-modal-option-radio"></span>
+                全部导入 (共 ${entries.length} 篇)
+              </div>
+              <div class="export-modal-option" data-range="custom">
+                <span class="export-modal-option-radio"></span>
+                导入指定日期段的日记
+              </div>
+              <div class="custom-date-section" id="custom-container-${customId}">
+                <div class="date-picker-row">
+                  <input type="date" class="input-settings" id="${startId}" value="${minDate}" min="${minDate}" max="${maxDate}" />
+                  <span>至</span>
+                  <input type="date" class="input-settings" id="${endId}" value="${maxDate}" min="${minDate}" max="${maxDate}" />
+                </div>
+              </div>
+            </div>
+          `,
+          confirmText: '开始导入',
+          onConfirm: async () => {
+            const modalEl = document.querySelector('.modal-overlay') as HTMLElement;
+            const activeOption = modalEl.querySelector('.export-modal-option.active') as HTMLElement;
+            const range = activeOption?.dataset.range || 'all';
+
+            let finalBackup = backupData;
+
+            if (range === 'custom') {
+              const startDate = (modalEl.querySelector(`#${startId}`) as HTMLInputElement).value;
+              const endDate = (modalEl.querySelector(`#${endId}`) as HTMLInputElement).value;
+
+              // 过滤日记条目
+              const filteredEntries = entries.filter((entry: any) => {
+                return entry.dateFor && entry.dateFor >= startDate && entry.dateFor <= endDate;
+              });
+
+              if (filteredEntries.length === 0) {
+                showToast('在选定的日期范围内没有可导入的日记', { type: 'error' });
+                return;
+              }
+
+              finalBackup = {
+                ...backupData,
+                entries: filteredEntries
+              };
+            }
+
+            try {
+              const result = await importData(JSON.stringify(finalBackup));
+              showToast(`导入成功，共恢复了 ${result.count} 篇日记`, { type: 'success' });
+            } catch (err) {
+              showToast('导入失败，请检查数据格式', { type: 'error' });
+            }
+          }
+        });
+
+        // 绑定导入 Modal 内部的选项卡事件
+        setTimeout(() => {
+          const modalEl = document.querySelector('.modal-overlay') as HTMLElement;
+          if (!modalEl) return;
+
+          const options = modalEl.querySelectorAll('.export-modal-option');
+          const customContainer = modalEl.querySelector(`#custom-container-${customId}`) as HTMLElement;
+
+          options.forEach(opt => {
+            opt.addEventListener('click', () => {
+              options.forEach(o => o.classList.remove('active'));
+              opt.classList.add('active');
+              const range = (opt as HTMLElement).dataset.range;
+              if (range === 'custom') {
+                customContainer.classList.add('active');
+              } else {
+                customContainer.classList.remove('active');
+              }
+            });
+          });
+        }, 50);
+
+      } catch (err) {
+        showToast('解析备份文件失败，请确保您选择的是合法的备份 JSON 文件', { type: 'error' });
+      }
+    };
+    reader.readAsText(file);
+    // 重置 input 以允许再次选择同名文件
+    fileInput.value = '';
+  });
+
+  // 8. 清空所有数据
   container.querySelector('#clear-all-btn')?.addEventListener('click', () => {
     showModal({
       title: '⚠️ 清空所有数据',
@@ -253,3 +945,4 @@ function bindSettingsEvents(container: HTMLElement): void {
     });
   });
 }
+

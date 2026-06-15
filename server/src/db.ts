@@ -80,6 +80,11 @@ function migrate(db: Database): void {
     // column already exists
   }
   try {
+    db.exec('ALTER TABLE users ADD COLUMN avatar TEXT;');
+  } catch (e) {
+    // column already exists
+  }
+  try {
     db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username);');
   } catch (e) {
     // index already exists

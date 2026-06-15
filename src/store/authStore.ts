@@ -4,6 +4,8 @@ export interface User {
   id: string;
   username: string;
   displayName: string;
+  avatar?: string | null;
+  createdAt?: string;
 }
 
 interface AuthState {
@@ -177,4 +179,23 @@ export async function changePassword(oldPassword: string, newPassword: string): 
     method: 'POST',
     body: jsonBody({ oldPassword, newPassword }),
   });
+}
+
+/**
+ * Update user profile (username, displayName, avatar)
+ */
+export async function updateProfile(data: { username?: string; displayName?: string; avatar?: string | null }): Promise<User> {
+  const res = await apiRequest<{ success: boolean; user: User }>('/auth/update-profile', {
+    method: 'POST',
+    body: jsonBody(data),
+  });
+
+  const currentUser = getCurrentUser();
+  if (currentUser && res.user) {
+    const updatedUser = { ...currentUser, ...res.user };
+    setCurrentUser(updatedUser);
+    return updatedUser;
+  }
+
+  throw new Error('更新个人资料失败');
 }

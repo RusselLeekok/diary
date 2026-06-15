@@ -2306,6 +2306,10 @@ body {
   display: none; /* Chrome, Safari, Edge */
 }
 
+.page-settings > * {
+  flex-shrink: 0;
+}
+
 .settings-sections { display: flex; flex-direction: column; gap: 20px; }
 
 .settings-section {
@@ -2399,26 +2403,59 @@ body {
 .toast {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 18px;
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
-  font-size: 0.85rem;
+  gap: 12px;
+  padding: 12px 20px;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  font-size: 0.875rem;
   font-weight: 500;
-  min-width: 200px;
-  max-width: 340px;
+  min-width: 240px;
+  max-width: 360px;
   opacity: 0;
-  transform: translateX(30px) scale(0.95);
-  transition: opacity 0.28s var(--ease), transform 0.28s var(--ease-spring);
+  transform: translateY(12px) scale(0.96);
+  transition: opacity 0.26s var(--ease), transform 0.26s var(--ease-spring);
   pointer-events: auto;
-  color: #fff;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-card) 92%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
 }
-.toast.toast-visible { opacity: 1; transform: translateX(0) scale(1); }
-.toast-icon { font-size: 0.95rem; font-weight: 700; flex-shrink: 0; }
-.toast-success { background: #3a8c62; }
-.toast-error { background: #b94040; }
-.toast-info { background: var(--accent); }
-.toast-warning { background: #c07830; }
+.toast.toast-visible { opacity: 1; transform: translateY(0) scale(1); }
+.toast-icon {
+  font-size: 1.05rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.toast-success {
+  border-left: 4px solid #3a8c62;
+}
+.toast-success .toast-icon {
+  color: #3a8c62;
+}
+.toast-error {
+  border-left: 4px solid #b94040;
+}
+.toast-error .toast-icon {
+  color: #b94040;
+}
+.toast-info {
+  border-left: 4px solid #9c7c4a;
+}
+.toast-info .toast-icon {
+  color: #9c7c4a;
+}
+.toast-warning {
+  border-left: 4px solid #c07830;
+}
+.toast-warning .toast-icon {
+  color: #c07830;
+}
 
 /* ==================== Modal 模态框 ==================== */
 .modal-overlay {
@@ -4752,10 +4789,11 @@ body {
 .topbar-user-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   background: none;
   border: none;
-  padding: 4px 10px;
+  min-height: 34px;
+  padding: 1px 8px 1px 2px;
   border-radius: var(--radius-full);
   cursor: pointer;
   color: var(--text-secondary);
@@ -4767,17 +4805,19 @@ body {
 }
 
 .user-avatar {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: var(--accent);
   color: #fff;
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: 1.05rem;
+  font-weight: 500;
+  font-family: var(--font-content);
   display: flex;
   align-items: center;
   justify-content: center;
   text-transform: uppercase;
+  flex: 0 0 auto;
 }
 
 .user-name {
@@ -4881,3 +4921,473 @@ body {
   color: var(--accent);
   border-color: var(--accent-light);
 }
+
+/* ==================== 设置页升级 Redesign 样式 ==================== */
+.settings-greeting-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 18px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+}
+
+.settings-greeting-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--accent-glow), transparent 48%);
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.settings-greeting-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  z-index: 2;
+  min-width: 0;
+}
+
+.settings-avatar-wrap {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-full);
+  position: relative;
+  cursor: pointer;
+  border: 2px solid var(--border-strong);
+  overflow: hidden;
+  transition: transform var(--duration) var(--ease-spring);
+  flex: 0 0 auto;
+}
+
+.settings-avatar-wrap:hover {
+  transform: scale(1.05);
+}
+
+.settings-avatar-wrap:hover .avatar-edit-overlay {
+  opacity: 1;
+}
+
+.avatar-edit-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  opacity: 0;
+  transition: opacity var(--duration) var(--ease);
+  pointer-events: none;
+}
+
+.settings-greeting-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.greeting-text {
+  font-size: 1.18rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: var(--font-content);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.user-meta-text {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.settings-greeting-actions {
+  z-index: 2;
+  flex: 0 0 auto;
+}
+
+/* 分区标题图标 */
+.settings-section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 20px 12px;
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-app);
+}
+
+.settings-sec-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.settings-section-title {
+  padding: 0 !important;
+  border-bottom: none !important;
+  background: transparent !important;
+}
+
+/* 内置 SVG 图标在各个元素中的应用 */
+.settings-item-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--text-secondary);
+  margin-right: 2px;
+}
+
+/* 修改资料面板 */
+.profile-edit-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 24px 26px 24px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
+  display: none;
+  animation: slideDown var(--duration) var(--ease);
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.profile-edit-title {
+  font-family: var(--font-content);
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.profile-edit-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.avatar-selector-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  display: block;
+}
+
+.avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 58px);
+  gap: 16px 20px;
+  align-items: center;
+}
+
+.avatar-option {
+  width: 58px;
+  aspect-ratio: 1;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  border: 2px solid transparent;
+  padding: 3px;
+  transition: all var(--duration) var(--ease);
+  position: relative;
+  overflow: hidden;
+}
+
+.avatar-option svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.avatar-option:hover {
+  transform: translateY(-2px);
+}
+
+.avatar-option.active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-glow) 70%, transparent);
+}
+
+.avatar-empty-option {
+  background: linear-gradient(180deg, var(--accent-bg), var(--bg-card));
+  border-color: var(--border);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-empty-option span {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-full);
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-content);
+  font-size: 1.15rem;
+  font-weight: 500;
+}
+
+.avatar-upload-option {
+  border: 1.5px dashed var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-app);
+}
+
+.avatar-upload-option.active {
+  border-style: solid;
+}
+
+.avatar-upload-option svg {
+  width: 40%;
+  height: 40%;
+  color: var(--text-muted);
+}
+
+.avatar-upload-option.active svg {
+  color: rgba(255, 255, 255, 0.78);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
+}
+
+.profile-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  max-width: 720px;
+}
+
+.profile-edit-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  align-items: center;
+  padding-top: 2px;
+}
+
+@media (max-width: 720px) {
+  .settings-greeting-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .settings-greeting-actions {
+    width: 100%;
+  }
+
+  .settings-greeting-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .profile-form-grid {
+    grid-template-columns: 1fr;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .page-settings {
+    padding: 20px 16px 44px;
+  }
+
+  .profile-edit-panel {
+    padding: 18px;
+  }
+
+  .avatar-grid {
+    grid-template-columns: repeat(auto-fill, minmax(54px, 1fr));
+    gap: 12px;
+  }
+
+  .avatar-option {
+    width: 100%;
+    max-width: 58px;
+  }
+
+  .profile-edit-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .profile-edit-actions .btn {
+    justify-content: center;
+  }
+}
+
+/* 密码修改面板 */
+.password-panel-wrap {
+  width: 100%;
+  max-width: 420px;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form-group-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group-settings label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.input-settings {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-family: var(--font-ui);
+  transition: all var(--duration) var(--ease);
+}
+
+.input-settings:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+/* 导出日期选择弹窗 & 导入确认弹窗 */
+.date-picker-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  align-items: center;
+}
+
+.date-picker-row input {
+  flex: 1;
+}
+
+.export-modal-option {
+  padding: 10px 14px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-card);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  transition: all var(--duration) var(--ease);
+}
+
+.export-modal-option:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-strong);
+}
+
+.export-modal-option.active {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.export-modal-option-radio {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--text-muted);
+  display: inline-block;
+  position: relative;
+}
+
+.export-modal-option.active .export-modal-option-radio {
+  border-color: var(--accent);
+}
+
+.export-modal-option.active .export-modal-option-radio::after {
+  content: '';
+  position: absolute;
+  inset: 2.5px;
+  background: var(--accent);
+  border-radius: var(--radius-full);
+}
+
+.custom-date-section {
+  display: none;
+  margin-top: 8px;
+  padding: 10px 14px;
+  border: 1.5px dashed var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-app);
+}
+
+.custom-date-section.active {
+  display: block;
+}
+
+.modal-info-box {
+  background: var(--bg-app);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  border: 1px solid var(--border-light);
+}
+
+.modal-info-box strong {
+  color: var(--accent);
+}
+
+.avatar-svg-container {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+/* 顶部导航栏用户头像大小 */
+.topbar-user-btn .user-avatar-preset,
+.topbar-user-btn .user-avatar-custom {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-size: cover;
+  background-position: center;
+}
+
+.topbar-user-btn .user-avatar-preset svg {
+  width: 100%;
+  height: 100%;
+}
+

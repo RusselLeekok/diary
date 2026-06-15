@@ -1,6 +1,7 @@
 import { getAppConfig, addCategory, renameCategory, deleteCategory } from '../store/appStore';
 import { getCategoryColor } from '../utils/categoryUtils';
 import { showModal } from './modal';
+import { showToast } from './toast';
 import { escapeHtml } from '../utils/htmlUtils';
 
 /**
@@ -124,9 +125,16 @@ export function showCategoryModal(onChanged?: () => void): void {
           confirmText: '确定删除',
           cancelText: '取消',
           confirmClass: 'btn-danger',
-          onConfirm: async () => {
-            await deleteCategory(catName);
+          onConfirm: () => {
+            const deletion = deleteCategory(catName);
             renderList();
+            void deletion
+              .then(() => renderList())
+              .catch(error => {
+                console.error('删除分类失败:', error);
+                showToast('删除分类失败，请稍后重试', { type: 'error' });
+                renderList();
+              });
           }
         });
       });

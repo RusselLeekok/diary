@@ -213,7 +213,7 @@ export async function renderViewPage(mainEl: HTMLElement, params?: Record<string
       onConfirm: () => {
         cleanup();
         removeEntrySummary(id);
-        showToast('日记已移入垃圾箱 ✓', { type: 'success' });
+        showToast('日记已移入垃圾箱', { type: 'success' });
         navigate('list');
         void trashEntry(id).catch(async error => {
           console.error('移入垃圾箱失败:', error);
