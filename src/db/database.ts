@@ -173,12 +173,8 @@ export async function getStats() {
   const entryYears = entries
     .map(entry => Number(entry.dateFor.slice(0, 4)))
     .filter(year => Number.isInteger(year));
-  const minYear = Math.min(currentYear - 1, currentYear, ...entryYears);
-  const maxYear = Math.max(currentYear, ...entryYears);
-  const years: number[] = [];
-  for (let year = maxYear; year >= minYear; year--) {
-    years.push(year);
-  }
+  const uniqueYears = Array.from(new Set(entryYears)).sort((a, b) => b - a);
+  const years = uniqueYears.length > 0 ? uniqueYears : [currentYear];
 
   const yearStats = Object.fromEntries(years.map(year => {
     const yearEntries = entries.filter(entry => entry.dateFor.startsWith(`${year}-`));

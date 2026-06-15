@@ -222,10 +222,11 @@ export class DateTimePicker {
       <button class="dt-footer-btn dt-clear-btn" id="dt-clear" type="button">清除</button>
     ` : '';
 
-    // 生成自定义年份选项
-    const startYear = this.viewYear - 10;
+    // 生成自定义年份选项，支持倒退 50 年，前进 15 年，轻松覆盖 1996 等早期年份
+    const startYear = this.viewYear - 50;
+    const endYear = this.viewYear + 15;
     let yearOptionsHTML = '';
-    for (let y = startYear; y <= this.viewYear + 10; y++) {
+    for (let y = startYear; y <= endYear; y++) {
       const isActive = y === this.viewYear;
       yearOptionsHTML += `
         <button class="dt-select-option ${isActive ? 'active' : ''}" data-value="${y}" type="button">${y}年</button>

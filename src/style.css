@@ -781,16 +781,18 @@ body {
   padding: 40px 20px 80px;
 }
 .empty-hero {
-  width: 280px;
-  height: 220px;
+  width: 240px;
+  height: 240px;
   margin-bottom: 32px;
   position: relative;
 }
 .empty-hero-img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  filter: drop-shadow(0 8px 24px rgba(60,40,10,0.12));
+  object-fit: cover;
+  border-radius: 20px;
+  box-shadow: 0 10px 28px rgba(60, 40, 10, 0.12);
+  border: 1px solid rgba(156, 124, 74, 0.18);
   animation: gentleFloat 4s ease-in-out infinite;
 }
 .empty-title {
@@ -3078,7 +3080,7 @@ body {
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
-  max-height: 135px; /* 最多显示 5 个选项，5 * 27px = 135px */
+  max-height: 189px; /* 最多显示 7 个选项，7 * 27px = 189px */
   overflow-y: auto;
   z-index: 1010;
   min-width: 70px;

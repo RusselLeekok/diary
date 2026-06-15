@@ -82,14 +82,14 @@ function destroyCharts(): void {
 export async function renderStatsPage(mainEl: HTMLElement): Promise<void> {
   destroyCharts();
   if (cachedStats) {
-    renderStatsView(mainEl, cachedStats, { range: 'all', year: getInitialYear(cachedStats) });
+    renderStatsView(mainEl, cachedStats, { range: 'last30', year: getInitialYear(cachedStats) });
   } else {
     renderStatsLoadingView(mainEl);
   }
 
   const stats = await loadStats();
   if (mainEl.querySelector('.page-stats')) {
-    renderStatsView(mainEl, stats, { range: 'all', year: getInitialYear(stats) });
+    renderStatsView(mainEl, stats, { range: 'last30', year: getInitialYear(stats) });
   }
 }
 
@@ -234,7 +234,7 @@ function buildStatsHTML(stats: StatsResponse, state: StatsViewState): string {
             <div class="stat-label">常见心情</div>
           </div>
           <div class="stat-card">
-            <div class="stat-value">${stats.maxStreak.toLocaleString()}</div>
+            <div class="stat-value">${activeStats.maxStreak.toLocaleString()}</div>
             <div class="stat-label">最长连续天数</div>
           </div>
         </div>
@@ -567,6 +567,7 @@ function createEmptyStats(): StatsPeriodResponse {
     moodCount: {},
     timelineEntries: [],
     weekdayEntries: Array.from({ length: 7 }, (_, weekday) => ({ weekday, count: 0, words: 0 })),
+    maxStreak: 0,
   };
 }
 

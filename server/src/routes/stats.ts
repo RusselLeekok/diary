@@ -16,6 +16,7 @@ interface PeriodStats {
   moodCount: Record<string, number>;
   timelineEntries: TimelineEntry[];
   weekdayEntries: Array<{ weekday: number; count: number; words: number }>;
+  maxStreak: number;
 }
 
 interface StatsRow {
@@ -88,12 +89,8 @@ export async function registerStatsRoutes(app: FastifyInstance): Promise<void> {
     const entryYears = rows
       .map(row => Number(row.date_for.slice(0, 4)))
       .filter(year => Number.isInteger(year));
-    const minYear = Math.min(currentYear - 1, currentYear, ...entryYears);
-    const maxYear = Math.max(currentYear, ...entryYears);
-    const years: number[] = [];
-    for (let year = maxYear; year >= minYear; year--) {
-      years.push(year);
-    }
+    const uniqueYears = Array.from(new Set(entryYears)).sort((a, b) => b - a);
+    const years = uniqueYears.length > 0 ? uniqueYears : [currentYear];
 
     const yearStats = Object.fromEntries(years.map(year => {
       const yearRows = rows.filter(row => row.date_for.startsWith(`${year}-`));
@@ -149,6 +146,21 @@ function summarizeRows(rows: StatsRow[], timelineEntries: TimelineEntry[]): Peri
     weekdays[weekday].words += row.word_count;
   });
 
+  // 计算此子集下的最长连续天数
+  let maxStreak = 0;
+  let current = 0;
+  const sortedDates = Array.from(activeDateSet).sort();
+  for (let i = 0; i < sortedDates.length; i++) {
+    if (i === 0) {
+      current = 1;
+    } else {
+      const prev = new Date(`${sortedDates[i - 1]}T00:00:00`);
+      const curr = new Date(`${sortedDates[i]}T00:00:00`);
+      current = (curr.getTime() - prev.getTime()) / 86_400_000 === 1 ? current + 1 : 1;
+    }
+    maxStreak = Math.max(maxStreak, current);
+  }
+
   return {
     total,
     totalWords,
@@ -157,6 +169,7 @@ function summarizeRows(rows: StatsRow[], timelineEntries: TimelineEntry[]): Peri
     moodCount,
     timelineEntries,
     weekdayEntries: weekdays,
+    maxStreak,
   };
 }
 

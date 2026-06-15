@@ -59,6 +59,7 @@ export interface StatsPeriodResponse {
   moodCount: Record<string, number>;
   timelineEntries: { key: string; label: string; count: number; words: number }[];
   weekdayEntries: { weekday: number; count: number; words: number }[];
+  maxStreak: number;
 }
 
 export interface StatsResponse {

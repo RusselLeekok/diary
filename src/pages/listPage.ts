@@ -498,13 +498,24 @@ function buildEntriesHTML(entries: DiaryEntrySummary[]): string {
   }
 
   if (entries.length === 0) {
-    const label = selectedDate
-      ? `${selectedDate} 没有日记`
-      : selectedCategory === ''
-        ? '没有未分类的日记'
-        : selectedCategory
-          ? `分类「${escapeHtml(selectedCategory)}」没有日记`
-          : '没有找到符合条件的日记';
+    if (selectedDate) {
+      return `
+        <div class="empty-state calendar-empty-state">
+          <div class="empty-hero">
+            <img src="/hero.png" alt="日记本插图" class="empty-hero-img" />
+          </div>
+          <h2 class="empty-title">${selectedDate} 没有日记</h2>
+          <p class="empty-desc">这一天还是一片空白。<br>点击下方按钮，开始写下那天的故事吧。</p>
+          <button class="btn btn-primary empty-cta" id="calendar-empty-new-btn">在这天写日记</button>
+        </div>
+      `;
+    }
+
+    const label = selectedCategory === ''
+      ? '没有未分类的日记'
+      : selectedCategory
+        ? `分类「${escapeHtml(selectedCategory)}」没有日记`
+        : '没有找到符合条件的日记';
     return `
       <div class="list-no-result">
         <span class="list-no-result-icon">📭</span>
@@ -662,6 +673,9 @@ export function clearListFilters(): void {
 // ====================================================
 function bindPageEvents(container: HTMLElement): void {
   container.querySelector('#empty-new-btn')?.addEventListener('click', () => navigate('editor'));
+  container.querySelector('#calendar-empty-new-btn')?.addEventListener('click', () => {
+    if (selectedDate) navigate('editor', { date: selectedDate });
+  });
   bindLoadMoreEvent(container);
 
   // 绑定搜索输入框与防抖
@@ -880,6 +894,9 @@ function updateFilteredResults(container: HTMLElement): void {
   if (entriesWrap) {
     entriesWrap.innerHTML = buildEntriesHTML(getFilteredEntries());
     entriesWrap.querySelector('#empty-new-btn')?.addEventListener('click', () => navigate('editor'));
+    entriesWrap.querySelector('#calendar-empty-new-btn')?.addEventListener('click', () => {
+      if (selectedDate) navigate('editor', { date: selectedDate });
+    });
     bindLoadMoreEvent(container);
     // 重新绑定卡片事件
     bindCardEvents(entriesWrap as HTMLElement, () => {
