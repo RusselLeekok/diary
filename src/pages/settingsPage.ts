@@ -27,27 +27,27 @@ export async function renderSettingsPage(mainEl: HTMLElement): Promise<void> {
               <span class="settings-item-desc">选择契合此刻心境的色彩纸质主题</span>
             </div>
             <div class="theme-picker-group">
-              <button class="theme-picker-btn ${config.theme === 'light' ? 'active' : ''}" data-theme="light" title="雅致暖米">
+              <button class="theme-picker-btn ${config.theme === 'light' ? 'active' : ''}" data-theme="light">
                 <span class="theme-color-preview" style="background:#f7f3eb;border-color:#9c7c4a"></span>
                 雅致暖米
               </button>
-              <button class="theme-picker-btn ${config.theme === 'plain' ? 'active' : ''}" data-theme="plain" title="朴素白">
+              <button class="theme-picker-btn ${config.theme === 'plain' ? 'active' : ''}" data-theme="plain">
                 <span class="theme-color-preview" style="background:#ffffff;border-color:#737373"></span>
                 朴素白
               </button>
-              <button class="theme-picker-btn ${config.theme === 'green' ? 'active' : ''}" data-theme="green" title="清幽森绿">
+              <button class="theme-picker-btn ${config.theme === 'green' ? 'active' : ''}" data-theme="green">
                 <span class="theme-color-preview" style="background:#edf3ec;border-color:#5a7860"></span>
                 清幽森绿
               </button>
-              <button class="theme-picker-btn ${config.theme === 'blue' ? 'active' : ''}" data-theme="blue" title="静谧天蓝">
+              <button class="theme-picker-btn ${config.theme === 'blue' ? 'active' : ''}" data-theme="blue">
                 <span class="theme-color-preview" style="background:#ebf3f7;border-color:#53778a"></span>
                 静谧天蓝
               </button>
-              <button class="theme-picker-btn ${config.theme === 'pink' ? 'active' : ''}" data-theme="pink" title="温柔樱粉">
+              <button class="theme-picker-btn ${config.theme === 'pink' ? 'active' : ''}" data-theme="pink">
                 <span class="theme-color-preview" style="background:#f7edf0;border-color:#8e5f6e"></span>
                 温柔樱粉
               </button>
-              <button class="theme-picker-btn ${config.theme === 'dark' ? 'active' : ''}" data-theme="dark" title="沉静暗夜">
+              <button class="theme-picker-btn ${config.theme === 'dark' ? 'active' : ''}" data-theme="dark">
                 <span class="theme-color-preview" style="background:#1c1812;border-color:#c4a46e"></span>
                 沉静暗夜
               </button>

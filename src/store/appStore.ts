@@ -187,6 +187,10 @@ export function cacheFullEntry(entry: DiaryEntry): void {
 
 export function upsertEntrySummary(entry: DiaryEntry): void {
   const summary = diaryEntryToSummary(entry);
+  upsertEntrySummarySnapshot(summary);
+}
+
+export function upsertEntrySummarySnapshot(summary: DiaryEntrySummary): void {
   const existingIndex = state.allEntries.findIndex(item => item.id === summary.id);
   if (existingIndex >= 0) {
     state.allEntries[existingIndex] = summary;

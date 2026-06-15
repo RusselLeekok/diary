@@ -69,6 +69,7 @@ function migrate(db: Database): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_entries_user_date ON entries(user_id, is_deleted, date_for DESC, time_for DESC, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_entries_user_deleted ON entries(user_id, is_deleted, deleted_at DESC, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_entries_user_mood ON entries(user_id, is_deleted, mood);
     CREATE INDEX IF NOT EXISTS idx_entries_user_category ON entries(user_id, is_deleted, category_id);
   `);

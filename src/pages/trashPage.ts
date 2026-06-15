@@ -1,8 +1,8 @@
 import { getTrashedEntries, restoreEntry, deleteEntry, clearTrash } from '../services/databaseService';
-import { refreshEntrySummaries, removeEntrySummary, upsertEntrySummary } from '../store/appStore';
+import { refreshEntrySummaries, removeEntrySummary, upsertEntrySummarySnapshot } from '../store/appStore';
 import { navigate } from '../router/router';
 import { MOOD_CONFIG } from '../types';
-import type { DiaryEntry } from '../types';
+import type { DiaryEntrySummary } from '../types';
 import { formatDisplayDate } from '../utils/dateUtils';
 import { showModal } from '../components/modal';
 import { showToast } from '../components/toast';
@@ -18,7 +18,7 @@ export async function renderTrashPage(mainEl: HTMLElement): Promise<void> {
 /**
  * 构建垃圾箱页面 DOM 结构
  */
-function buildPage(mainEl: HTMLElement, trashed: DiaryEntry[]): void {
+function buildPage(mainEl: HTMLElement, trashed: DiaryEntrySummary[]): void {
   const count = trashed.length;
 
   mainEl.innerHTML = `
@@ -31,7 +31,7 @@ function buildPage(mainEl: HTMLElement, trashed: DiaryEntry[]): void {
         </div>
         <div class="trash-actions">
           ${count > 0 ? `
-            <button class="btn btn-ghost trash-clear-btn" id="trash-clear-all" title="物理永久删除所有被删除日记">
+            <button class="btn btn-ghost trash-clear-btn" id="trash-clear-all">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
                 <polyline points="3 6 5 6 21 6"/>
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -70,7 +70,7 @@ function buildPage(mainEl: HTMLElement, trashed: DiaryEntry[]): void {
 /**
  * 渲染单篇垃圾日记的横排卡片
  */
-function renderTrashCard(entry: DiaryEntry): string {
+function renderTrashCard(entry: DiaryEntrySummary): string {
   const mood = MOOD_CONFIG[entry.mood];
   const dateStr = formatDisplayDate(entry.dateFor);
   const timeStr = entry.timeFor ? ' ' + entry.timeFor : '';
@@ -92,14 +92,14 @@ function renderTrashCard(entry: DiaryEntry): string {
         <p class="trash-card-preview">${textPreview}</p>
       </div>
       <div class="trash-card-actions">
-        <button class="btn btn-ghost trash-btn-restore" data-id="${entry.id}" title="将该日记移回普通日记列表">
+        <button class="btn btn-ghost trash-btn-restore" data-id="${entry.id}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13">
             <polyline points="23 4 23 10 17 10"/>
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
           </svg>
           恢复
         </button>
-        <button class="btn btn-ghost trash-btn-delete" data-id="${entry.id}" title="从存储中物理永久删除该日记，不可恢复">
+        <button class="btn btn-ghost trash-btn-delete" data-id="${entry.id}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13">
             <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
           </svg>
@@ -113,7 +113,7 @@ function renderTrashCard(entry: DiaryEntry): string {
 /**
  * 绑定按钮点击事件
  */
-function bindPageEvents(container: HTMLElement, trashed: DiaryEntry[]): void {
+function bindPageEvents(container: HTMLElement, trashed: DiaryEntrySummary[]): void {
   // 返回列表按钮
   container.querySelector('#trash-back-list')?.addEventListener('click', () => {
     navigate('list');
@@ -148,7 +148,7 @@ function bindPageEvents(container: HTMLElement, trashed: DiaryEntry[]): void {
       e.stopPropagation();
       const entry = trashed.find(item => item.id === id);
       if (entry) {
-        upsertEntrySummary({ ...entry, isDeleted: false, updatedAt: new Date().toISOString() });
+        upsertEntrySummarySnapshot({ ...entry, isDeleted: false, updatedAt: new Date().toISOString() });
       }
       removeTrashCard(container, id, trashed);
       showToast('日记已恢复 ✓', { type: 'success' });
@@ -188,7 +188,7 @@ function bindPageEvents(container: HTMLElement, trashed: DiaryEntry[]): void {
   });
 }
 
-function removeTrashCard(container: HTMLElement, id: string, trashed: DiaryEntry[]): void {
+function removeTrashCard(container: HTMLElement, id: string, trashed: DiaryEntrySummary[]): void {
   const card = Array.from(container.querySelectorAll('.trash-card'))
     .find(item => (item as HTMLElement).dataset.id === id) as HTMLElement | undefined;
   card?.classList.add('is-removing');

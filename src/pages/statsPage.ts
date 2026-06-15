@@ -53,6 +53,8 @@ type RangeKey = 'all' | 'last30' | 'last180' | 'year';
 type StatsViewState = { range: RangeKey; year: number };
 
 let chartInstances: Chart<any, any, any>[] = [];
+let cachedStats: StatsResponse | null = null;
+let statsRequestPromise: Promise<StatsResponse> | null = null;
 
 const rangeOptions: Array<{ key: RangeKey; label: string; description: string }> = [
   { key: 'all', label: '全部', description: '所有日记' },
@@ -79,8 +81,71 @@ function destroyCharts(): void {
 
 export async function renderStatsPage(mainEl: HTMLElement): Promise<void> {
   destroyCharts();
-  const stats = await getStats();
-  renderStatsView(mainEl, stats, { range: 'all', year: getInitialYear(stats) });
+  if (cachedStats) {
+    renderStatsView(mainEl, cachedStats, { range: 'all', year: getInitialYear(cachedStats) });
+  } else {
+    renderStatsLoadingView(mainEl);
+  }
+
+  const stats = await loadStats();
+  if (mainEl.querySelector('.page-stats')) {
+    renderStatsView(mainEl, stats, { range: 'all', year: getInitialYear(stats) });
+  }
+}
+
+function loadStats(): Promise<StatsResponse> {
+  if (statsRequestPromise) return statsRequestPromise;
+
+  statsRequestPromise = getStats()
+    .then(stats => {
+      cachedStats = stats;
+      return stats;
+    })
+    .finally(() => {
+      statsRequestPromise = null;
+    });
+
+  return statsRequestPromise;
+}
+
+function renderStatsLoadingView(mainEl: HTMLElement): void {
+  mainEl.innerHTML = `
+    <div class="page-stats">
+      <div class="stats-hero">
+        <div class="stats-title-block">
+          <span class="stats-kicker">写作范围</span>
+          <h1 class="page-title">数据统计</h1>
+        </div>
+      </div>
+      <section class="stats-year-summary">
+        <div class="stats-year-main">
+          <span class="entry-skeleton-line entry-skeleton-line-date"></span>
+          <div class="entry-skeleton-line entry-skeleton-line-title"></div>
+          <div class="entry-skeleton-line entry-skeleton-line-text"></div>
+        </div>
+        <div class="stats-overview stats-overview-compact">
+          ${Array.from({ length: 6 }, () => `
+            <div class="stat-card">
+              <div class="entry-skeleton-line entry-skeleton-line-title"></div>
+              <div class="entry-skeleton-line entry-skeleton-line-short"></div>
+            </div>
+          `).join('')}
+        </div>
+      </section>
+      <div class="charts-grid stats-charts-grid">
+        ${Array.from({ length: 3 }, (_, index) => `
+          <div class="chart-card ${index === 0 ? 'chart-wide' : ''}">
+            <div class="chart-heading">
+              <div class="entry-skeleton-line entry-skeleton-line-title"></div>
+            </div>
+            <div class="chart-container">
+              <div class="entry-skeleton-card" aria-hidden="true"></div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
 }
 
 function renderStatsView(mainEl: HTMLElement, stats: StatsResponse, state: StatsViewState): void {

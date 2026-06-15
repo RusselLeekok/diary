@@ -224,13 +224,14 @@ export async function trashEntry(id: string): Promise<void> {
   await apiRequest<void>(`/entries/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
-export async function getTrashedEntries(): Promise<DiaryEntry[]> {
+export async function getTrashedEntries(): Promise<DiaryEntrySummary[]> {
   const data = await apiRequest<EntriesResponse>('/trash/entries');
-  return data.entries.map(toDiaryEntry);
+  return data.entries.map(toDiaryEntrySummary);
 }
 
-export async function restoreEntry(id: string): Promise<void> {
-  await apiRequest<EntryResponse>(`/trash/entries/${encodeURIComponent(id)}/restore`, { method: 'POST' });
+export async function restoreEntry(id: string): Promise<DiaryEntry | undefined> {
+  const data = await apiRequest<EntryResponse>(`/trash/entries/${encodeURIComponent(id)}/restore`, { method: 'POST' });
+  return data.entry ? toDiaryEntry(data.entry) : undefined;
 }
 
 export async function clearTrash(): Promise<void> {

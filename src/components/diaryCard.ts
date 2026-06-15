@@ -75,7 +75,7 @@ export function renderDiaryCard(entry: DiaryEntrySummary): string {
             <div class="card-tags">${tags}${moodBadge}${weatherBadge}</div>
             <div class="card-meta">
               <span class="card-wordcount">${Number(entry.wordCount) || 0} 字</span>
-              <button class="card-delete-btn" data-id="${safeId}" title="删除此日记" aria-label="删除">
+              <button class="card-delete-btn" data-id="${safeId}" aria-label="删除">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                   <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
                 </svg>
@@ -108,7 +108,7 @@ export function renderDiaryCard(entry: DiaryEntrySummary): string {
           <div class="card-tags">${tags}${moodBadge}${weatherBadge}</div>
           <div class="card-meta">
             <span class="card-wordcount">${Number(entry.wordCount) || 0} 字</span>
-            <button class="card-delete-btn" data-id="${safeId}" title="删除此日记" aria-label="删除">
+            <button class="card-delete-btn" data-id="${safeId}" aria-label="删除">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                 <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
               </svg>
@@ -139,7 +139,7 @@ interface AuthImageStoredItem {
 const authImageMemoryCache = new Map<string, AuthImageMemoryItem>();
 let authImageStorageCache: Record<string, AuthImageStoredItem> | null = null;
 
-function renderCardImage(src: string, version?: string): string {
+export function renderCardImage(src: string, version?: string): string {
   const imageSrc = withImageVersion(src, version);
   const safeSrc = escapeHtml(imageSrc);
   if (shouldFetchImageWithAuth(imageSrc)) {
@@ -153,7 +153,7 @@ function renderCardImage(src: string, version?: string): string {
 }
 
 function shouldFetchImageWithAuth(src: string): boolean {
-  return /\/api\/v1\/entries\/[^/]+\/first-image(?:$|[?#])/i.test(src);
+  return /\/api\/v1\/(?:trash\/)?entries\/[^/]+\/first-image(?:$|[?#])/i.test(src);
 }
 
 function withImageVersion(src: string, version?: string): string {
@@ -229,7 +229,7 @@ export function bindCardEvents(container: HTMLElement, onDelete?: (id: string) =
   });
 }
 
-function bindCardImagePreviews(container: HTMLElement): void {
+export function bindCardImagePreviews(container: HTMLElement): void {
   container.querySelectorAll<HTMLImageElement>('img[data-auth-src]').forEach(img => {
     const src = img.dataset.authSrc;
     if (!src) return;

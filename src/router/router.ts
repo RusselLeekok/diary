@@ -81,27 +81,8 @@ function render(page: PageName, params?: Record<string, string>): void {
     }
   }
 
-  const mainEl = document.getElementById('main-content');
-  const currentChild = mainEl?.firstElementChild as HTMLElement | null;
-
-  // 如果当前有页面在展示，先播放退出动画再渲染新页面
-  if (currentChild && !currentChild.classList.contains('page-exit')) {
-    currentChild.classList.add('page-exit');
-
-    let completed = false;
-    const done = () => {
-      if (completed) return;
-      completed = true;
-      currentChild.removeEventListener('animationend', done);
-      handler(params);
-    };
-
-    currentChild.addEventListener('animationend', done);
-    // 170ms 兜底，确保退出过渡必定能顺利完成并切页
-    setTimeout(done, 170);
-  } else {
-    handler(params);
-  }
+  // 直接执行渲染，不等待退出动画，彻底消除串行等待导致的白屏
+  handler(params);
 }
 
 /** 解析 hash 中的参数 */

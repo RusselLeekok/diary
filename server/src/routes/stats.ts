@@ -1,6 +1,5 @@
 import type { FastifyInstance } from 'fastify';
 import { toLocalDateString } from '../shared/date.js';
-import { getUserId, type EntryRow } from '../repositories.js';
 
 interface TimelineEntry {
   key: string;
@@ -19,19 +18,32 @@ interface PeriodStats {
   weekdayEntries: Array<{ weekday: number; count: number; words: number }>;
 }
 
+interface StatsRow {
+  date_for: string;
+  mood: string;
+  word_count: number;
+}
+
+interface AggregateBucket {
+  count: number;
+  words: number;
+}
+
 export async function registerStatsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/v1/stats/overview', async (request) => {
     const userId = request.userId!;
     const rows = app.db.prepare(`
-      SELECT e.*, c.name AS category_name
+      SELECT e.date_for, e.mood, e.word_count
       FROM entries e
-      LEFT JOIN categories c ON c.id = e.category_id
       WHERE e.user_id = ? AND e.is_deleted = 0
       ORDER BY e.date_for ASC
-    `).all(userId) as unknown as EntryRow[];
+    `).all(userId) as unknown as StatsRow[];
 
     const total = rows.length;
     const totalWords = rows.reduce((sum, row) => sum + row.word_count, 0);
+    const dailyBuckets = aggregateRows(rows, row => row.date_for);
+    const monthlyBuckets = aggregateRows(rows, row => row.date_for.slice(0, 7));
+    const yearlyBuckets = aggregateRows(rows, row => row.date_for.slice(0, 4));
     const moodCount: Record<string, number> = {};
     rows.forEach(row => {
       moodCount[row.mood] = (moodCount[row.mood] ?? 0) + 1;
@@ -44,9 +56,10 @@ export async function registerStatsRoutes(app: FastifyInstance): Promise<void> {
       const d = new Date(today);
       d.setDate(d.getDate() - i);
       const date = toLocalDateString(d);
+      const bucket = dailyBuckets.get(date);
       dailyWords.push({
         date,
-        count: rows.filter(row => row.date_for === date).reduce((sum, row) => sum + row.word_count, 0),
+        count: bucket?.words ?? 0,
       });
     }
 
@@ -84,7 +97,7 @@ export async function registerStatsRoutes(app: FastifyInstance): Promise<void> {
 
     const yearStats = Object.fromEntries(years.map(year => {
       const yearRows = rows.filter(row => row.date_for.startsWith(`${year}-`));
-      const timelineEntries = buildYearMonthTimeline(rows, year);
+      const timelineEntries = buildYearMonthTimeline(monthlyBuckets, year);
       const summary = summarizeRows(yearRows, timelineEntries);
 
       return [String(year), {
@@ -105,14 +118,14 @@ export async function registerStatsRoutes(app: FastifyInstance): Promise<void> {
     const allEnd = rows.at(-1)?.date_for ?? todayString;
 
     const periodStats = {
-      all: summarizeRows(rows, buildYearlyTimeline(rows, allStart, allEnd)),
+      all: summarizeRows(rows, buildYearlyTimeline(yearlyBuckets, allStart, allEnd)),
       last30: summarizeRows(
         rows.filter(row => row.date_for >= last30Start && row.date_for <= todayString),
-        buildDailyTimeline(rows, today, 30),
+        buildDailyTimeline(dailyBuckets, today, 30),
       ),
       last180: summarizeRows(
         rows.filter(row => row.date_for >= last180Start && row.date_for <= todayString),
-        buildMonthlyTimeline(rows, last180Start, todayString),
+        buildMonthlyTimeline(monthlyBuckets, last180Start, todayString),
       ),
     };
 
@@ -120,7 +133,7 @@ export async function registerStatsRoutes(app: FastifyInstance): Promise<void> {
   });
 }
 
-function summarizeRows(rows: EntryRow[], timelineEntries: TimelineEntry[]): PeriodStats {
+function summarizeRows(rows: StatsRow[], timelineEntries: TimelineEntry[]): PeriodStats {
   const total = rows.length;
   const totalWords = rows.reduce((sum, row) => sum + row.word_count, 0);
   const moodCount: Record<string, number> = {};
@@ -147,20 +160,32 @@ function summarizeRows(rows: EntryRow[], timelineEntries: TimelineEntry[]): Peri
   };
 }
 
-function buildDailyTimeline(rows: EntryRow[], today: Date, days: number): TimelineEntry[] {
+function aggregateRows(rows: StatsRow[], getKey: (row: StatsRow) => string): Map<string, AggregateBucket> {
+  const buckets = new Map<string, AggregateBucket>();
+  rows.forEach(row => {
+    const key = getKey(row);
+    const bucket = buckets.get(key) ?? { count: 0, words: 0 };
+    bucket.count += 1;
+    bucket.words += row.word_count;
+    buckets.set(key, bucket);
+  });
+  return buckets;
+}
+
+function buildDailyTimeline(buckets: Map<string, AggregateBucket>, today: Date, days: number): TimelineEntry[] {
   return Array.from({ length: days }, (_, index) => {
     const date = toLocalDateString(addDays(today, index - days + 1));
-    const dayRows = rows.filter(row => row.date_for === date);
+    const bucket = buckets.get(date);
     return {
       key: date,
       label: date.slice(5),
-      count: dayRows.length,
-      words: dayRows.reduce((sum, row) => sum + row.word_count, 0),
+      count: bucket?.count ?? 0,
+      words: bucket?.words ?? 0,
     };
   });
 }
 
-function buildMonthlyTimeline(rows: EntryRow[], startDate: string, endDate: string): TimelineEntry[] {
+function buildMonthlyTimeline(buckets: Map<string, AggregateBucket>, startDate: string, endDate: string): TimelineEntry[] {
   const start = new Date(`${startDate.slice(0, 7)}-01T00:00:00`);
   const end = new Date(`${endDate.slice(0, 7)}-01T00:00:00`);
   const entries: TimelineEntry[] = [];
@@ -170,12 +195,12 @@ function buildMonthlyTimeline(rows: EntryRow[], startDate: string, endDate: stri
     const year = cursor.getFullYear();
     const month = cursor.getMonth() + 1;
     const key = `${year}-${String(month).padStart(2, '0')}`;
-    const monthRows = rows.filter(row => row.date_for.startsWith(key));
+    const bucket = buckets.get(key);
     entries.push({
       key,
       label: `${year}年${month}月`,
-      count: monthRows.length,
-      words: monthRows.reduce((sum, row) => sum + row.word_count, 0),
+      count: bucket?.count ?? 0,
+      words: bucket?.words ?? 0,
     });
     cursor.setMonth(cursor.getMonth() + 1);
   }
@@ -183,32 +208,32 @@ function buildMonthlyTimeline(rows: EntryRow[], startDate: string, endDate: stri
   return entries;
 }
 
-function buildYearlyTimeline(rows: EntryRow[], startDate: string, endDate: string): TimelineEntry[] {
+function buildYearlyTimeline(buckets: Map<string, AggregateBucket>, startDate: string, endDate: string): TimelineEntry[] {
   const startYear = Number(startDate.slice(0, 4));
   const endYear = Number(endDate.slice(0, 4));
 
   return Array.from({ length: endYear - startYear + 1 }, (_, index) => {
     const year = startYear + index;
-    const yearRows = rows.filter(row => row.date_for.startsWith(`${year}-`));
+    const bucket = buckets.get(String(year));
     return {
       key: String(year),
       label: `${year}年`,
-      count: yearRows.length,
-      words: yearRows.reduce((sum, row) => sum + row.word_count, 0),
+      count: bucket?.count ?? 0,
+      words: bucket?.words ?? 0,
     };
   });
 }
 
-function buildYearMonthTimeline(rows: EntryRow[], year: number): TimelineEntry[] {
+function buildYearMonthTimeline(buckets: Map<string, AggregateBucket>, year: number): TimelineEntry[] {
   return Array.from({ length: 12 }, (_, index) => {
     const month = index + 1;
     const key = `${year}-${String(month).padStart(2, '0')}`;
-    const monthRows = rows.filter(row => row.date_for.startsWith(key));
+    const bucket = buckets.get(key);
     return {
       key,
       label: `${month}月`,
-      count: monthRows.length,
-      words: monthRows.reduce((sum, row) => sum + row.word_count, 0),
+      count: bucket?.count ?? 0,
+      words: bucket?.words ?? 0,
     };
   });
 }

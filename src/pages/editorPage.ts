@@ -64,7 +64,7 @@ export async function renderEditorPage(mainEl: HTMLElement, params?: Record<stri
     <div class="page-editor">
       <!-- 编辑器顶部工具栏 -->
       <div class="editor-topbar">
-        <button class="btn btn-ghost editor-back" id="editor-back" title="返回列表">
+        <button class="btn btn-ghost editor-back" id="editor-back">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
             <polyline points="15 18 9 12 15 6"/>
           </svg>
@@ -75,7 +75,7 @@ export async function renderEditorPage(mainEl: HTMLElement, params?: Record<stri
           <div id="dt-picker-container" class="dt-picker-container"></div>
           <!-- 情绪选择 -->
           <div class="mood-selector" id="mood-selector">
-            <button class="mood-current" id="mood-current" type="button" title="选择情绪">
+            <button class="mood-current" id="mood-current" type="button">
               <span>${MOOD_CONFIG[moodValue].emoji}</span>
               <span class="mood-label-text">${MOOD_CONFIG[moodValue].label}</span>
             </button>
@@ -89,7 +89,7 @@ export async function renderEditorPage(mainEl: HTMLElement, params?: Record<stri
           </div>
           <!-- 天气选择 -->
           <div class="weather-selector" id="weather-selector">
-            <button class="weather-current" id="weather-current" type="button" title="选择天气">
+            <button class="weather-current" id="weather-current" type="button">
               <span class="weather-current-emoji">${WEATHER_CONFIG[weatherValue].emoji}</span>
               <span class="weather-label-text">${WEATHER_CONFIG[weatherValue].label}</span>
             </button>
@@ -119,7 +119,7 @@ export async function renderEditorPage(mainEl: HTMLElement, params?: Record<stri
           </div>
           <!-- 分类选择器（单选下拉） -->
           <div class="cat-picker" id="cat-picker">
-            <button class="cat-picker-trigger" id="cat-picker-trigger" type="button" title="选择分类">
+            <button class="cat-picker-trigger" id="cat-picker-trigger" type="button">
               <span class="cat-dot" style="background:${catColor}"></span>
               <span id="cat-picker-label">${escapeHtml(catLabel)}</span>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="10" height="10" class="cat-picker-caret">
@@ -132,7 +132,7 @@ export async function renderEditorPage(mainEl: HTMLElement, params?: Record<stri
         </div>
         <div class="editor-actions">
           <span class="word-count" id="word-count">0 字</span>
-          <span class="autosave-indicator" id="autosave-indicator" title="自动保存状态"></span>
+          <span class="autosave-indicator" id="autosave-indicator"></span>
           <button class="btn btn-primary" id="save-btn">保存</button>
         </div>
       </div>
