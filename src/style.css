@@ -3032,10 +3032,81 @@ body {
   margin-bottom: 12px;
 }
 
-.dt-month-label {
-  font-weight: 600;
-  font-size: 0.88rem;
+.dt-select-wrapper {
+  position: relative;
+}
+
+.dt-select-trigger {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-family: var(--font-ui);
   color: var(--text-primary);
+  background: var(--bg-app);
+  outline: none;
+  padding: 3px 18px 3px 8px;
+  cursor: pointer;
+  transition: all var(--duration) var(--ease);
+  position: relative;
+  min-width: 56px;
+  text-align: left;
+}
+
+.dt-select-trigger::after {
+  content: "";
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-20%);
+  border-left: 3.5px solid transparent;
+  border-right: 3.5px solid transparent;
+  border-top: 3.5px solid var(--text-secondary);
+  pointer-events: none;
+}
+
+.dt-select-trigger:focus, .dt-select-trigger:hover {
+  border-color: var(--accent);
+}
+
+.dt-select-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 5px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  max-height: 135px; /* 最多显示 5 个选项，5 * 27px = 135px */
+  overflow-y: auto;
+  z-index: 1010;
+  min-width: 70px;
+  display: flex;
+  flex-direction: column;
+}
+
+.dt-select-option {
+  padding: 5px 8px;
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  text-align: center;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--duration) var(--ease);
+  font-family: var(--font-ui);
+}
+
+.dt-select-option:hover {
+  background: var(--bg-app);
+}
+
+.dt-select-option.active {
+  background: var(--accent-glow);
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .dt-nav-btn {

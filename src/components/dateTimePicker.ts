@@ -164,8 +164,6 @@ export class DateTimePicker {
   }
 
   private buildPanelHTML(): string {
-    const monthName = MONTH_NAMES[this.viewMonth];
-
     // 生成日历格子
     const firstDay = new Date(this.viewYear, this.viewMonth, 1).getDay();
     const daysInMonth = new Date(this.viewYear, this.viewMonth + 1, 0).getDate();
@@ -224,6 +222,25 @@ export class DateTimePicker {
       <button class="dt-footer-btn dt-clear-btn" id="dt-clear" type="button">清除</button>
     ` : '';
 
+    // 生成自定义年份选项
+    const startYear = this.viewYear - 10;
+    let yearOptionsHTML = '';
+    for (let y = startYear; y <= this.viewYear + 10; y++) {
+      const isActive = y === this.viewYear;
+      yearOptionsHTML += `
+        <button class="dt-select-option ${isActive ? 'active' : ''}" data-value="${y}" type="button">${y}年</button>
+      `;
+    }
+
+    // 生成自定义月份选项
+    let monthOptionsHTML = '';
+    MONTH_NAMES.forEach((name, index) => {
+      const isActive = index === this.viewMonth;
+      monthOptionsHTML += `
+        <button class="dt-select-option ${isActive ? 'active' : ''}" data-value="${index}" type="button">${name}</button>
+      `;
+    });
+
     return `
       <div class="dt-panel-inner">
         <!-- 月份导航 -->
@@ -231,7 +248,22 @@ export class DateTimePicker {
           <button class="dt-nav-btn" id="dt-prev" type="button">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
-          <span class="dt-month-label">${this.viewYear}年 ${monthName}</span>
+          <div class="dt-month-year-selectors" style="display:flex;align-items:center;gap:6px">
+            <!-- 年份 -->
+            <div class="dt-select-wrapper" id="dt-year-wrapper">
+              <button class="dt-select-trigger" id="dt-year-trigger" type="button">${this.viewYear}年</button>
+              <div class="dt-select-dropdown" id="dt-year-dropdown" style="display:none;">
+                ${yearOptionsHTML}
+              </div>
+            </div>
+            <!-- 月份 -->
+            <div class="dt-select-wrapper" id="dt-month-wrapper">
+              <button class="dt-select-trigger" id="dt-month-trigger" type="button">${MONTH_NAMES[this.viewMonth]}</button>
+              <div class="dt-select-dropdown" id="dt-month-dropdown" style="display:none;">
+                ${monthOptionsHTML}
+              </div>
+            </div>
+          </div>
           <button class="dt-nav-btn" id="dt-next" type="button">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
@@ -272,6 +304,70 @@ export class DateTimePicker {
       this.viewMonth++;
       if (this.viewMonth > 11) { this.viewMonth = 0; this.viewYear++; }
       this.refreshPanel();
+    });
+
+    // 自定义年份下拉展开与选择
+    const yearTrigger = this.panel.querySelector('#dt-year-trigger') as HTMLButtonElement;
+    const yearDropdown = this.panel.querySelector('#dt-year-dropdown') as HTMLElement;
+    
+    yearTrigger?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isHidden = yearDropdown.style.display === 'none';
+      const monthDropdown = this.panel?.querySelector('#dt-month-dropdown') as HTMLElement;
+      if (monthDropdown) monthDropdown.style.display = 'none';
+      
+      if (isHidden) {
+        yearDropdown.style.display = 'flex';
+        const activeOpt = yearDropdown.querySelector('.dt-select-option.active') as HTMLElement;
+        if (activeOpt) {
+          setTimeout(() => activeOpt.scrollIntoView({ block: 'nearest' }), 0);
+        }
+      } else {
+        yearDropdown.style.display = 'none';
+      }
+    });
+
+    yearDropdown?.querySelectorAll('.dt-select-option').forEach(opt => {
+      opt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const val = parseInt((opt as HTMLElement).dataset.value!, 10);
+        if (!isNaN(val)) {
+          this.viewYear = val;
+          this.refreshPanel();
+        }
+      });
+    });
+
+    // 自定义月份下拉展开与选择
+    const monthTrigger = this.panel.querySelector('#dt-month-trigger') as HTMLButtonElement;
+    const monthDropdown = this.panel.querySelector('#dt-month-dropdown') as HTMLElement;
+    
+    monthTrigger?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isHidden = monthDropdown.style.display === 'none';
+      const yearDropdownEl = this.panel?.querySelector('#dt-year-dropdown') as HTMLElement;
+      if (yearDropdownEl) yearDropdownEl.style.display = 'none';
+      
+      if (isHidden) {
+        monthDropdown.style.display = 'flex';
+        const activeOpt = monthDropdown.querySelector('.dt-select-option.active') as HTMLElement;
+        if (activeOpt) {
+          setTimeout(() => activeOpt.scrollIntoView({ block: 'nearest' }), 0);
+        }
+      } else {
+        monthDropdown.style.display = 'none';
+      }
+    });
+
+    monthDropdown?.querySelectorAll('.dt-select-option').forEach(opt => {
+      opt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const val = parseInt((opt as HTMLElement).dataset.value!, 10);
+        if (!isNaN(val)) {
+          this.viewMonth = val;
+          this.refreshPanel();
+        }
+      });
     });
 
     // 日期格子点击
