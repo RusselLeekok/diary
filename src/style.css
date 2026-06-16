@@ -5243,11 +5243,32 @@ body {
 /* 密码修改面板 */
 .password-panel-wrap {
   width: 100%;
-  max-width: 420px;
   margin-top: 10px;
+}
+
+.password-edit-card {
+  width: 100%;
+  background: var(--bg-app);
+  border: 1px dashed var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+  box-sizing: border-box;
+}
+
+.password-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.password-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 4px;
 }
 
 .form-group-settings {
@@ -5260,6 +5281,13 @@ body {
   font-size: 0.78rem;
   font-weight: 600;
   color: var(--text-secondary);
+}
+
+@media (max-width: 720px) {
+  .password-form-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
 }
 
 .input-settings {
@@ -5343,6 +5371,7 @@ body {
 .custom-date-section {
   display: none;
   margin-top: 8px;
+  margin-bottom: 20px;
   padding: 10px 14px;
   border: 1.5px dashed var(--border-light);
   border-radius: var(--radius-sm);
@@ -5405,7 +5434,8 @@ body {
   margin-bottom: 12px;
 }
 
-.export-range-quick-btn {
+.export-range-quick-btn,
+.export-range-clear-btn {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-card);
@@ -5423,6 +5453,19 @@ body {
   background: var(--accent-bg);
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.export-range-clear-btn {
+  margin-left: auto;
+  color: var(--text-muted);
+  border-color: var(--border-light);
+  font-weight: 500;
+}
+
+.export-range-clear-btn:hover {
+  background: var(--danger-bg) !important;
+  border-color: var(--danger) !important;
+  color: var(--danger) !important;
 }
 
 .export-range-toolbar {

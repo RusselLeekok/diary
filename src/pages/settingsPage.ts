@@ -133,6 +133,7 @@ function getDateRangePickerHtml(customId: string, startId: string, endId: string
           <button type="button" class="export-range-quick-btn" data-quick-days="7">最近7天</button>
           <button type="button" class="export-range-quick-btn active" data-quick-days="30">最近30天</button>
           <button type="button" class="export-range-quick-btn" data-quick-days="180">最近180天</button>
+          <button type="button" class="export-range-clear-btn" id="export-clear-btn-${customId}">清空</button>
         </div>
         <div class="export-range-calendars"></div>
       </div>
@@ -155,7 +156,7 @@ function getCalendarMonthHtml(field: 'start' | 'end', year: number, month: numbe
     const dateValue = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const isStart = dateValue === startDate;
     const isEnd = dateValue === endDate;
-    const isInRange = dateValue > startDate && dateValue < endDate;
+    const isInRange = startDate && endDate && dateValue > startDate && dateValue < endDate;
     const classes = [
       'export-calendar-day',
       dateValue === todayValue ? 'today' : '',
@@ -207,14 +208,15 @@ function bindExportDateRangePicker(modalEl: HTMLElement, customId: string, start
       getCalendarMonthHtml('end', endYear, endMonth, startInput.value, endInput.value),
     ].join('');
 
-    picker.querySelector('[data-range-label="start"]')!.textContent = startInput.value;
-    picker.querySelector('[data-range-label="end"]')!.textContent = endInput.value;
+    picker.querySelector('[data-range-label="start"]')!.textContent = startInput.value || '--';
+    picker.querySelector('[data-range-label="end"]')!.textContent = endInput.value || '--';
   };
 
   picker.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
     const navBtn = target.closest('.export-range-nav-btn') as HTMLElement | null;
     const quickBtn = target.closest('.export-range-quick-btn') as HTMLElement | null;
+    const clearBtn = target.closest('.export-range-clear-btn') as HTMLElement | null;
     const dropdownTrigger = target.closest('.export-range-dropdown-trigger') as HTMLElement | null;
     const dropdownOption = target.closest('.export-range-dropdown-option') as HTMLElement | null;
     const dayBtn = target.closest('[data-date]') as HTMLElement | null;
@@ -224,6 +226,14 @@ function bindExportDateRangePicker(modalEl: HTMLElement, customId: string, start
         item.classList.remove('open');
         item.querySelector('.export-range-dropdown-trigger')?.setAttribute('aria-expanded', 'false');
       });
+    }
+
+    if (clearBtn) {
+      startInput.value = '';
+      endInput.value = '';
+      picker.querySelectorAll('.export-range-quick-btn').forEach(btn => btn.classList.remove('active'));
+      renderCalendars();
+      return;
     }
 
     if (dropdownTrigger) {
@@ -292,10 +302,14 @@ function bindExportDateRangePicker(modalEl: HTMLElement, customId: string, start
       picker.querySelectorAll('.export-range-quick-btn').forEach(btn => btn.classList.remove('active'));
       if (field === 'start') {
         startInput.value = dateValue;
-        if (startInput.value > endInput.value) endInput.value = dateValue;
+        if (!endInput.value || startInput.value > endInput.value) {
+          endInput.value = dateValue;
+        }
       } else {
         endInput.value = dateValue;
-        if (endInput.value < startInput.value) startInput.value = dateValue;
+        if (!startInput.value || endInput.value < startInput.value) {
+          startInput.value = dateValue;
+        }
       }
       renderCalendars();
     }
@@ -496,22 +510,26 @@ export async function renderSettingsPage(mainEl: HTMLElement): Promise<void> {
             </div>
             
             <!-- 就地更改密码面板 (默认隐藏) -->
-            <div class="password-panel-wrap" id="pwd-edit-panel" style="display:none;width:100%;margin-top:8px;border-top:1.5px dashed var(--border-light);padding-top:16px;">
-              <div class="form-group-settings" style="margin-bottom:12px;">
-                <label for="edit-old-pwd">当前旧密码</label>
-                <input type="password" class="input-settings" id="edit-old-pwd" placeholder="请输入当前旧密码" />
-              </div>
-              <div class="form-group-settings" style="margin-bottom:12px;">
-                <label for="edit-new-pwd">新密码（至少6位）</label>
-                <input type="password" class="input-settings" id="edit-new-pwd" placeholder="请输入新密码" />
-              </div>
-              <div class="form-group-settings" style="margin-bottom:16px;">
-                <label for="edit-confirm-pwd">确认新密码</label>
-                <input type="password" class="input-settings" id="edit-confirm-pwd" placeholder="请再次输入新密码" />
-              </div>
-              <div style="display:flex;gap:10px;justify-content:flex-end;">
-                <button class="btn btn-ghost btn-sm" id="cancel-pwd-btn">取消</button>
-                <button class="btn btn-primary btn-sm" id="save-pwd-btn">保存新密码</button>
+            <div class="password-panel-wrap" id="pwd-edit-panel" style="display:none;width:100%;">
+              <div class="password-edit-card">
+                <div class="password-form-grid">
+                  <div class="form-group-settings">
+                    <label for="edit-old-pwd">当前旧密码</label>
+                    <input type="password" class="input-settings" id="edit-old-pwd" placeholder="请输入当前旧密码" />
+                  </div>
+                  <div class="form-group-settings">
+                    <label for="edit-new-pwd">新密码（至少6位）</label>
+                    <input type="password" class="input-settings" id="edit-new-pwd" placeholder="请输入新密码" />
+                  </div>
+                  <div class="form-group-settings">
+                    <label for="edit-confirm-pwd">确认新密码</label>
+                    <input type="password" class="input-settings" id="edit-confirm-pwd" placeholder="请再次输入新密码" />
+                  </div>
+                </div>
+                <div class="password-actions">
+                  <button class="btn btn-ghost btn-sm" id="cancel-pwd-btn">取消</button>
+                  <button class="btn btn-primary btn-sm" id="save-pwd-btn">保存新密码</button>
+                </div>
               </div>
             </div>
           </div>
