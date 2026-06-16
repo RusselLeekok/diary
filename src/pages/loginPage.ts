@@ -3,9 +3,6 @@ import { navigate } from '../router/router';
 import { showToast } from '../components/toast';
 
 export function renderLoginPage(container: HTMLElement): void {
-  // Set document title
-  document.title = '登录 - 个人专属日记';
-
   container.innerHTML = `
     <div class="login-page-container">
       <div class="login-glow-bg"></div>

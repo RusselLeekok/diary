@@ -6,6 +6,18 @@ type RouteHandler = (params?: Record<string, string>) => void;
 // 路由表
 const routes: Map<PageName, RouteHandler> = new Map();
 const VALID_PAGES = new Set<PageName>(['list', 'intro', 'editor', 'calendar', 'trash', 'stats', 'settings', 'view', 'login']);
+const APP_TITLE = '我的日记';
+const PAGE_TITLES: Record<PageName, string> = {
+  list: APP_TITLE,
+  intro: `${APP_TITLE} - 应用介绍`,
+  editor: `${APP_TITLE} - 编辑日记`,
+  calendar: `${APP_TITLE} - 日历`,
+  trash: `${APP_TITLE} - 垃圾箱`,
+  stats: `${APP_TITLE} - 统计`,
+  settings: `${APP_TITLE} - 设置`,
+  view: `${APP_TITLE} - 阅读日记`,
+  login: `${APP_TITLE} - 登录`,
+};
 
 // 当前页面与前一页面
 let currentPage: PageName = 'list';
@@ -14,6 +26,10 @@ let previousPage: PageName | null = null;
 /** 注册路由 */
 export function registerRoute(page: PageName, handler: RouteHandler): void {
   routes.set(page, handler);
+}
+
+function updateDocumentTitle(page: PageName): void {
+  document.title = PAGE_TITLES[page] || APP_TITLE;
 }
 
 function checkAuthGuard(page: PageName, params?: Record<string, string>): PageName {
@@ -80,6 +96,8 @@ function render(page: PageName, params?: Record<string, string>): void {
       appLayoutEl.classList.remove('layout-clean');
     }
   }
+
+  updateDocumentTitle(page);
 
   // 直接执行渲染，不等待退出动画，彻底消除串行等待导致的白屏
   handler(params);

@@ -1,8 +1,6 @@
 import { navigate } from '../router/router';
 
 export function renderIntroPage(container: HTMLElement): void {
-  document.title = '日记 - 应用介绍';
-
   container.innerHTML = `
     <div class="page-intro">
       <section class="intro-hero">

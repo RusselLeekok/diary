@@ -3850,9 +3850,11 @@ body {
 }
 
 .trash-title {
-  font-size: 1.25rem;
-  font-family: var(--font-ui);
-  font-weight: 600;
+  font-size: 1.45rem;
+  font-family: var(--font-content);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
   color: var(--text-primary);
 }
 
