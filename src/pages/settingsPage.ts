@@ -1,5 +1,5 @@
 import { getAppConfig, updateConfig } from '../store/appStore';
-import { clearAllEntries, getAllEntries, filterEntries, importData, exportData } from '../services/databaseService';
+import { clearAllEntries, getAllEntries, filterEntries, importData, exportData, getSyncStatusSnapshot, syncNow } from '../services/databaseService';
 import { exportAsMarkdown } from '../utils/exportUtils';
 import { showToast } from '../components/toast';
 import { showModal } from '../components/modal';
@@ -343,6 +343,17 @@ function bindExportModalInteractions(customId: string, startId: string, endId: s
 export async function renderSettingsPage(mainEl: HTMLElement): Promise<void> {
   const config = getAppConfig();
   const user = getCurrentUser();
+  const syncStatus = await getSyncStatusSnapshot();
+  const syncStatusText = syncStatus.isSyncing
+    ? '同步中'
+    : syncStatus.lastError
+      ? '同步失败'
+      : syncStatus.pendingCount > 0
+        ? `待同步 ${syncStatus.pendingCount} 条`
+        : '已同步';
+  const lastSyncText = syncStatus.lastSyncedAt
+    ? new Date(syncStatus.lastSyncedAt).toLocaleString('zh-CN')
+    : '尚未同步';
 
   // 根据时间获得问候语
   const hour = new Date().getHours();
@@ -547,6 +558,14 @@ export async function renderSettingsPage(mainEl: HTMLElement): Promise<void> {
           </div>
           <div class="settings-item">
             <div class="settings-item-info">
+              <span class="settings-item-label">云同步</span>
+              <span class="settings-item-desc" id="sync-status-desc">状态：${syncStatusText}；上次同步：${lastSyncText}</span>
+              ${syncStatus.lastError ? `<span class="settings-item-desc danger-text">错误：${syncStatus.lastError}</span>` : ''}
+            </div>
+            <button class="btn btn-ghost" id="sync-now-btn" ${syncStatus.isSyncing ? 'disabled' : ''}>立即同步</button>
+          </div>
+          <div class="settings-item">
+            <div class="settings-item-info">
               <span class="settings-item-label">导出数据（JSON备份）</span>
               <span class="settings-item-desc">导出所有日记和配置，可用于备份和恢复，支持按日期过滤</span>
             </div>
@@ -591,7 +610,7 @@ export async function renderSettingsPage(mainEl: HTMLElement): Promise<void> {
             <div class="about-info">
               <p class="about-name">我的日记</p>
               <p class="about-version">版本 1.1.0</p>
-              <p class="about-desc">一款简洁、私密的个人日记应用。所有数据存储在您的浏览器本地，不上传外部服务器。</p>
+              <p class="about-desc">一款简洁、私密的个人日记应用。数据优先保存在本地，登录后可通过云同步在多设备间保持一致。</p>
             </div>
           </div>
         </section>
@@ -893,6 +912,35 @@ function bindSettingsEvents(container: HTMLElement, mainEl: HTMLElement): void {
   });
 
   // 5. 导出 JSON 支持选择日期
+  container.querySelector('#sync-now-btn')?.addEventListener('click', async () => {
+    const button = container.querySelector('#sync-now-btn') as HTMLButtonElement | null;
+    const desc = container.querySelector('#sync-status-desc') as HTMLElement | null;
+    try {
+      if (button) {
+        button.disabled = true;
+        button.textContent = '同步中';
+      }
+      const next = await syncNow();
+      const nextText = next.lastError
+        ? '同步失败'
+        : next.pendingCount > 0
+          ? `待同步 ${next.pendingCount} 条`
+          : '已同步';
+      if (desc) {
+        desc.textContent = `状态：${nextText}；上次同步：${next.lastSyncedAt ? new Date(next.lastSyncedAt).toLocaleString('zh-CN') : '尚未同步'}`;
+      }
+      showToast(next.lastError ? next.lastError : '云同步完成', { type: next.lastError ? 'error' : 'success' });
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '云同步失败', { type: 'error' });
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = '立即同步';
+      }
+    }
+  });
+
+  // 6. 导出 JSON 支持选择日期
   container.querySelector('#export-json-btn')?.addEventListener('click', () => {
     const customId = `export-json-dates-${Math.floor(Math.random() * 1000)}`;
     const startId = `start-${customId}`;
@@ -945,7 +993,7 @@ function bindSettingsEvents(container: HTMLElement, mainEl: HTMLElement): void {
     }, 50);
   });
 
-  // 6. 导出 Markdown 支持选择日期
+  // 7. 导出 Markdown 支持选择日期
   container.querySelector('#export-md-btn')?.addEventListener('click', () => {
     const customId = `export-md-dates-${Math.floor(Math.random() * 1000)}`;
     const startId = `start-${customId}`;
@@ -1008,7 +1056,7 @@ function bindSettingsEvents(container: HTMLElement, mainEl: HTMLElement): void {
     }, 50);
   });
 
-  // 7. 导入 JSON，读取文件并询问是否过滤日期
+  // 8. 导入 JSON，读取文件并询问是否过滤日期
   container.querySelector('#import-file-input')?.addEventListener('change', async (e) => {
     const file = (e.target as HTMLInputElement).files?.[0];
     if (!file) return;
@@ -1138,7 +1186,7 @@ function bindSettingsEvents(container: HTMLElement, mainEl: HTMLElement): void {
     fileInput.value = '';
   });
 
-  // 8. 清空所有数据
+  // 9. 清空所有数据
   container.querySelector('#clear-all-btn')?.addEventListener('click', () => {
     showModal({
       title: '⚠️ 清空所有数据',

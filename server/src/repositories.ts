@@ -44,6 +44,8 @@ export interface EntryRow {
   deleted_at: string | null;
   weather: string | null;
   location: string | null;
+  server_version: number;
+  client_updated_at: string | null;
 }
 
 export function getUserId(): string {
@@ -72,6 +74,8 @@ export function rowToEntry(row: EntryRow) {
     deletedAt: row.deleted_at ?? undefined,
     weather: row.weather ?? undefined,
     location: row.location ?? undefined,
+    serverVersion: row.server_version,
+    clientUpdatedAt: row.client_updated_at ?? undefined,
   };
 }
 
@@ -96,6 +100,7 @@ export function rowToEntrySummary(row: EntryRow) {
     firstImageSrc: extractFirstImageSrc(row.content_html)
       ? `/api/v1/entries/${encodeURIComponent(row.id)}/first-image`
       : '',
+    serverVersion: row.server_version,
   };
 }
 
@@ -176,9 +181,9 @@ export function upsertEntry(db: Database, payload: ReturnType<typeof normalizeEn
     INSERT INTO entries (
       id, user_id, title, content_html, plain_text, mood, category_id, word_count,
       is_locked, is_deleted, date_for, time_for, created_at, updated_at, deleted_at,
-      weather, location
+      weather, location, client_updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       title = excluded.title,
       content_html = excluded.content_html,
@@ -193,7 +198,9 @@ export function upsertEntry(db: Database, payload: ReturnType<typeof normalizeEn
       updated_at = excluded.updated_at,
       deleted_at = excluded.deleted_at,
       weather = excluded.weather,
-      location = excluded.location
+      location = excluded.location,
+      server_version = entries.server_version + 1,
+      client_updated_at = excluded.client_updated_at
   `).run(
     payload.id,
     payload.userId,
@@ -212,5 +219,6 @@ export function upsertEntry(db: Database, payload: ReturnType<typeof normalizeEn
     payload.deletedAt,
     payload.weather,
     payload.location,
+    payload.updatedAt,
   );
 }

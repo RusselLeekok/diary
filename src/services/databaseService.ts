@@ -1,55 +1,33 @@
 import type { AppConfig, DiaryEntry, DiaryEntrySummary, MoodType, WeatherType } from '../types';
-import { DEFAULT_CONFIG, MOOD_CONFIG, WEATHER_CONFIG } from '../types';
-import { apiRequest, jsonBody, API_BASE_URL } from './apiClient';
-
-interface EntryResponse {
-  entry: ServerEntry;
-}
-
-interface EntriesResponse {
-  entries: ServerEntry[];
-  hasMore?: boolean;
-  nextOffset?: number;
-}
-
-interface EntrySummariesResponse {
-  entries: ServerEntry[];
-  hasMore?: boolean;
-  nextOffset?: number;
-}
-
-interface ServerEntry {
-  id: string;
-  title: string;
-  content?: string;
-  contentHtml?: string;
-  plainText: string;
-  mood: string;
-  tags?: string[];
-  wordCount: number;
-  isLocked: boolean;
-  isDeleted?: boolean;
-  createdAt: string;
-  updatedAt: string;
-  dateFor: string;
-  timeFor?: string;
-  weather?: string;
-  location?: string;
-  firstImageSrc?: string;
-}
+import { MOOD_CONFIG, WEATHER_CONFIG } from '../types';
+import {
+  db,
+  deleteLocalCategory,
+  enqueueMutation,
+  ensureDefaultCategories,
+  getAllEntries as getLocalEntries,
+  getAllTags as getLocalTags,
+  getConfig as getLocalConfig,
+  getDatesWithEntries as getLocalDatesWithEntries,
+  getEntriesByDate as getLocalEntriesByDate,
+  getEntryById as getLocalEntryById,
+  getLocalCategories,
+  getPendingSyncCount,
+  getStats as getLocalStats,
+  importData as importLocalData,
+  putLocalCategory,
+  saveEntry as saveLocalEntry,
+  searchEntries as searchLocalEntries,
+  setConfigItem as setLocalConfigItem,
+  trashEntry as trashLocalEntry,
+  type LocalCategory,
+} from '../db/database';
+import { countWords, toDateString } from '../utils/dateUtils';
+import { sanitizeDiaryContent } from '../utils/htmlUtils';
+import { getSyncState, triggerSync } from './syncService';
 
 const DEFAULT_ENTRY_LIST_LIMIT = 200;
 export const ENTRY_SUMMARY_PAGE_SIZE = 120;
-
-interface CategoriesResponse {
-  categories: Array<{ id: string; name: string; entryCount?: number }>;
-}
-
-interface SettingsResponse {
-  theme: AppConfig['theme'];
-  fontSize: AppConfig['fontSize'];
-  autoSaveInterval: number;
-}
 
 export interface StatsPeriodResponse {
   total: number;
@@ -82,56 +60,59 @@ export interface StatsResponse {
   }>;
 }
 
-function toDiaryEntry(entry: ServerEntry): DiaryEntry {
-  const mood = entry.mood in MOOD_CONFIG ? entry.mood as MoodType : 'none';
-  const weather = entry.weather && entry.weather in WEATHER_CONFIG ? entry.weather as WeatherType : 'none';
+export interface SyncStatusSnapshot {
+  pendingCount: number;
+  lastSyncedAt?: string;
+  lastError?: string;
+  isSyncing: boolean;
+}
+
+function normalizeEntryForLocal(entry: DiaryEntry): DiaryEntry {
+  const content = sanitizeDiaryContent(entry.content ?? '');
+  const plainText = entry.plainText || htmlToText(content);
+  const now = new Date().toISOString();
+  return {
+    ...entry,
+    title: (entry.title?.trim() || plainText.slice(0, 30).trim() || '无标题').slice(0, 100),
+    content,
+    plainText,
+    mood: isMood(entry.mood) ? entry.mood : 'none',
+    weather: isWeather(entry.weather) ? entry.weather : 'none',
+    tags: Array.isArray(entry.tags) ? entry.tags.filter(Boolean).slice(0, 1) : [],
+    wordCount: countWords(plainText),
+    createdAt: entry.createdAt || now,
+    updatedAt: entry.updatedAt || now,
+    dateFor: entry.dateFor || toDateString(new Date()),
+    syncStatus: entry.syncStatus ?? 'pending',
+    serverVersion: entry.serverVersion ?? 0,
+  };
+}
+
+function diaryEntryToSummary(entry: DiaryEntry): DiaryEntrySummary {
   return {
     id: entry.id,
     title: entry.title,
-    content: entry.contentHtml ?? entry.content ?? '',
-    plainText: entry.plainText ?? '',
-    mood,
-    tags: entry.tags ?? [],
-    wordCount: Number(entry.wordCount) || 0,
-    isLocked: Boolean(entry.isLocked),
-    isDeleted: Boolean(entry.isDeleted),
+    plainText: entry.plainText.slice(0, 240),
+    mood: entry.mood,
+    tags: entry.tags,
+    wordCount: entry.wordCount,
+    isLocked: entry.isLocked,
+    isDeleted: entry.isDeleted,
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt,
     dateFor: entry.dateFor,
     timeFor: entry.timeFor,
-    weather,
-    location: entry.location ?? '',
+    weather: entry.weather,
+    location: entry.location,
+    firstImageSrc: extractFirstImageSrc(entry.content),
+    serverVersion: entry.serverVersion,
+    syncStatus: entry.syncStatus,
+    deletedAt: entry.deletedAt,
   };
 }
 
-function toDiaryEntrySummary(entry: ServerEntry): DiaryEntrySummary {
-  const mood = entry.mood in MOOD_CONFIG ? entry.mood as MoodType : 'none';
-  const weather = entry.weather && entry.weather in WEATHER_CONFIG ? entry.weather as WeatherType : 'none';
-  return {
-    id: entry.id,
-    title: entry.title,
-    plainText: entry.plainText ?? '',
-    mood,
-    tags: entry.tags ?? [],
-    wordCount: Number(entry.wordCount) || 0,
-    isLocked: Boolean(entry.isLocked),
-    isDeleted: Boolean(entry.isDeleted),
-    createdAt: entry.createdAt,
-    updatedAt: entry.updatedAt,
-    dateFor: entry.dateFor,
-    timeFor: entry.timeFor,
-    weather,
-    location: entry.location ?? '',
-    firstImageSrc: normalizeApiAssetSrc(entry.firstImageSrc ?? ''),
-  };
-}
-
-function normalizeApiAssetSrc(src: string): string {
-  const apiPrefix = '/api/v1';
-  if (src.startsWith(apiPrefix)) {
-    return `${API_BASE_URL}${src.slice(apiPrefix.length)}`;
-  }
-  return src;
+function extractFirstImageSrc(html: string): string {
+  return html.match(/<img[^>]+src=(["'])(.*?)\1/i)?.[2] ?? '';
 }
 
 function entryPayload(entry: DiaryEntry) {
@@ -144,19 +125,21 @@ function entryPayload(entry: DiaryEntry) {
     dateFor: entry.dateFor,
     timeFor: entry.timeFor ?? null,
     isLocked: entry.isLocked,
+    isDeleted: Boolean(entry.isDeleted),
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
     weather: entry.weather ?? 'none',
     location: entry.location ?? null,
   };
 }
 
 export async function getAllEntries(): Promise<DiaryEntry[]> {
-  const data = await apiRequest<EntriesResponse>(`/entries?limit=${DEFAULT_ENTRY_LIST_LIMIT}`);
-  return data.entries.map(toDiaryEntry);
+  return (await getLocalEntries()).slice(0, DEFAULT_ENTRY_LIST_LIMIT);
 }
 
 export async function getEntrySummaries(): Promise<DiaryEntrySummary[]> {
-  const data = await getEntrySummaryPage();
-  return data.entries;
+  const page = await getEntrySummaryPage();
+  return page.entries;
 }
 
 export async function getEntrySummaryPage(options: { limit?: number; offset?: number } = {}): Promise<{
@@ -164,89 +147,146 @@ export async function getEntrySummaryPage(options: { limit?: number; offset?: nu
   hasMore: boolean;
   nextOffset: number;
 }> {
-  const params = new URLSearchParams({
-    view: 'summary',
-    limit: String(options.limit ?? ENTRY_SUMMARY_PAGE_SIZE),
-  });
-  if (options.offset) params.set('offset', String(options.offset));
-
-  const data = await apiRequest<EntrySummariesResponse>(`/entries?${params.toString()}`);
-  const entries = data.entries.map(toDiaryEntrySummary);
+  const offset = options.offset ?? 0;
+  const limit = options.limit ?? ENTRY_SUMMARY_PAGE_SIZE;
+  const all = (await getLocalEntries()).map(diaryEntryToSummary);
+  const entries = all.slice(offset, offset + limit);
   return {
     entries,
-    hasMore: Boolean(data.hasMore),
-    nextOffset: typeof data.nextOffset === 'number'
-      ? data.nextOffset
-      : (options.offset ?? 0) + entries.length,
+    hasMore: offset + entries.length < all.length,
+    nextOffset: offset + entries.length,
   };
 }
 
 export async function getEntryById(id: string): Promise<DiaryEntry | undefined> {
-  try {
-    const data = await apiRequest<EntryResponse>(`/entries/${encodeURIComponent(id)}`);
-    return toDiaryEntry(data.entry);
-  } catch (error) {
-    if (isNotFound(error)) return undefined;
-    throw error;
-  }
+  return await getLocalEntryById(id);
 }
 
 export async function getEntriesByDate(dateFor: string): Promise<DiaryEntry[]> {
-  const params = new URLSearchParams({ date: dateFor, limit: '500' });
-  const data = await apiRequest<EntriesResponse>(`/entries?${params.toString()}`);
-  return data.entries.map(toDiaryEntry);
+  return (await getLocalEntriesByDate(dateFor)).filter(entry => entry.isDeleted !== true);
 }
 
 export async function getDatesWithEntries(year: number, month: number): Promise<Set<string>> {
-  const start = `${year}-${String(month).padStart(2, '0')}-01`;
-  const lastDay = new Date(year, month, 0).getDate();
-  const end = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-  const params = new URLSearchParams({ dateFrom: start, dateTo: end, limit: '500' });
-  const data = await apiRequest<EntriesResponse>(`/entries?${params.toString()}`);
-  return new Set(data.entries.map(entry => entry.dateFor));
+  return await getLocalDatesWithEntries(year, month);
 }
 
 export async function saveEntry(entry: DiaryEntry): Promise<void> {
-  const existing = await getEntryById(entry.id);
-  const method = existing ? 'PUT' : 'POST';
-  const path = existing ? `/entries/${encodeURIComponent(entry.id)}` : '/entries';
-  await apiRequest<EntryResponse>(path, {
-    method,
-    body: jsonBody(entryPayload(entry)),
+  const existing = await getLocalEntryById(entry.id);
+  const now = new Date().toISOString();
+  const next = normalizeEntryForLocal({
+    ...entry,
+    createdAt: existing?.createdAt ?? entry.createdAt ?? now,
+    updatedAt: now,
+    serverVersion: existing?.serverVersion ?? entry.serverVersion ?? 0,
+    syncStatus: 'pending',
   });
+
+  await saveLocalEntry(next);
+  await enqueueMutation({
+    entityType: 'entry',
+    entityId: next.id,
+    op: existing ? 'update' : 'create',
+    payload: entryPayload(next),
+    baseVersion: existing?.serverVersion ?? 0,
+  });
+  triggerSyncSoon();
 }
 
 /** 彻底删除日记。普通删除请使用 trashEntry。 */
 export async function deleteEntry(id: string): Promise<void> {
-  await apiRequest<void>(`/trash/entries/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  const existing = await getLocalEntryById(id);
+  await db.entries.delete(id);
+  await enqueueMutation({
+    entityType: 'entry',
+    entityId: id,
+    op: 'delete',
+    payload: { id },
+    baseVersion: existing?.serverVersion ?? 0,
+  });
+  triggerSyncSoon();
 }
 
 export async function trashEntry(id: string): Promise<void> {
-  await apiRequest<void>(`/entries/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  const existing = await getLocalEntryById(id);
+  if (!existing) return;
+  await trashLocalEntry(id);
+  const trashed = await getLocalEntryById(id);
+  if (!trashed) return;
+  const next = {
+    ...trashed,
+    deletedAt: trashed.deletedAt ?? new Date().toISOString(),
+    syncStatus: 'pending' as const,
+  };
+  await saveLocalEntry(next);
+  await enqueueMutation({
+    entityType: 'entry',
+    entityId: id,
+    op: 'update',
+    payload: entryPayload(next),
+    baseVersion: existing.serverVersion ?? 0,
+  });
+  triggerSyncSoon();
 }
 
 export async function getTrashedEntries(): Promise<DiaryEntrySummary[]> {
-  const data = await apiRequest<EntriesResponse>('/trash/entries');
-  return data.entries.map(toDiaryEntrySummary);
+  const all = await db.entries.orderBy('dateFor').reverse().toArray();
+  return all.filter(entry => entry.isDeleted === true).map(diaryEntryToSummary);
 }
 
 export async function restoreEntry(id: string): Promise<DiaryEntry | undefined> {
-  const data = await apiRequest<EntryResponse>(`/trash/entries/${encodeURIComponent(id)}/restore`, { method: 'POST' });
-  return data.entry ? toDiaryEntry(data.entry) : undefined;
+  const existing = await getLocalEntryById(id);
+  if (!existing) return undefined;
+  const next = {
+    ...existing,
+    isDeleted: false,
+    deletedAt: undefined,
+    updatedAt: new Date().toISOString(),
+    syncStatus: 'pending' as const,
+  };
+  await saveLocalEntry(next);
+  await enqueueMutation({
+    entityType: 'entry',
+    entityId: id,
+    op: 'update',
+    payload: entryPayload(next),
+    baseVersion: existing.serverVersion ?? 0,
+  });
+  triggerSyncSoon();
+  return next;
 }
 
 export async function clearTrash(): Promise<void> {
-  await apiRequest<{ deleted: number }>('/trash/entries', { method: 'DELETE' });
+  const trashed = await db.entries.filter(entry => entry.isDeleted === true).toArray();
+  for (const entry of trashed) {
+    await enqueueMutation({
+      entityType: 'entry',
+      entityId: entry.id,
+      op: 'delete',
+      payload: { id: entry.id },
+      baseVersion: entry.serverVersion ?? 0,
+    });
+  }
+  await db.entries.bulkDelete(trashed.map(entry => entry.id));
+  triggerSyncSoon();
 }
 
 export async function clearAllEntries(): Promise<void> {
-  await apiRequest<{ deleted: number }>('/entries', { method: 'DELETE' });
+  const entries = await db.entries.toArray();
+  for (const entry of entries) {
+    await enqueueMutation({
+      entityType: 'entry',
+      entityId: entry.id,
+      op: 'delete',
+      payload: { id: entry.id },
+      baseVersion: entry.serverVersion ?? 0,
+    });
+  }
+  await db.entries.clear();
+  triggerSyncSoon();
 }
 
 export async function searchEntries(keyword: string): Promise<DiaryEntry[]> {
-  const params = new URLSearchParams({ keyword, limit: '500' });
-  const data = await apiRequest<EntriesResponse>(`/entries?${params.toString()}`);
-  return data.entries.map(toDiaryEntry);
+  return await searchLocalEntries(keyword);
 }
 
 export async function filterEntries(params: {
@@ -256,103 +296,222 @@ export async function filterEntries(params: {
   dateFrom?: string;
   dateTo?: string;
 }): Promise<DiaryEntry[]> {
-  const query = new URLSearchParams({ limit: '500' });
-  if (params.keyword) query.set('keyword', params.keyword);
-  if (params.mood) query.set('mood', params.mood);
-  if (params.dateFrom) query.set('dateFrom', params.dateFrom);
-  if (params.dateTo) query.set('dateTo', params.dateTo);
-  if (params.tags?.[0]) {
-    const categories = await getCategories();
-    const category = categories.find(item => item.name === params.tags?.[0]);
-    if (category) query.set('categoryId', category.id);
-  }
-  const data = await apiRequest<EntriesResponse>(`/entries?${query.toString()}`);
-  return data.entries.map(toDiaryEntry);
+  const entries = await getLocalEntries();
+  const keyword = params.keyword?.trim().toLowerCase();
+  return entries.filter(entry => {
+    if (entry.isDeleted === true) return false;
+    if (keyword && !entry.title.toLowerCase().includes(keyword) && !entry.plainText.toLowerCase().includes(keyword)) return false;
+    if (params.mood && entry.mood !== params.mood) return false;
+    if (params.tags?.length && !params.tags.some(tag => entry.tags.includes(tag))) return false;
+    if (params.dateFrom && entry.dateFor < params.dateFrom) return false;
+    if (params.dateTo && entry.dateFor > params.dateTo) return false;
+    return true;
+  });
 }
 
 export async function getAllTags(): Promise<string[]> {
-  const categories = await getCategories();
-  return categories.map(category => category.name).sort();
+  return await getLocalTags();
 }
 
 export async function getStats(): Promise<StatsResponse> {
-  return await apiRequest<StatsResponse>('/stats/overview');
+  return await getLocalStats() as StatsResponse;
 }
 
 export async function getConfig(): Promise<AppConfig> {
-  const [settings, categories] = await Promise.all([
-    apiRequest<SettingsResponse>('/settings'),
-    getAllTags(),
-  ]);
-  return {
-    ...DEFAULT_CONFIG,
-    theme: settings.theme,
-    fontSize: settings.fontSize,
-    autoSaveInterval: settings.autoSaveInterval,
-    categories,
-    hasPassword: false,
-    passwordHash: '',
-  };
+  return await getLocalConfig();
 }
 
 export async function setConfigItem(key: string, value: unknown): Promise<void> {
+  await setLocalConfigItem(key, value);
   if (key === 'theme' || key === 'fontSize' || key === 'autoSaveInterval') {
-    await apiRequest<SettingsResponse>('/settings', {
-      method: 'PATCH',
-      body: jsonBody({ [key]: value }),
+    await enqueueMutation({
+      entityType: 'setting',
+      entityId: key,
+      op: 'update',
+      payload: { key, value },
+      baseVersion: 0,
     });
+    triggerSyncSoon();
   }
 }
 
 export async function exportData(startDate?: string, endDate?: string): Promise<string> {
-  const params = new URLSearchParams();
-  if (startDate) params.set('startDate', startDate);
-  if (endDate) params.set('endDate', endDate);
-  const queryStr = params.toString() ? `?${params.toString()}` : '';
-  const data = await apiRequest<unknown>(`/export/json${queryStr}`);
-  return JSON.stringify(data, null, 2);
+  const entries = (await db.entries.toArray())
+    .filter(entry => (!startDate || entry.dateFor >= startDate) && (!endDate || entry.dateFor <= endDate))
+    .sort((a, b) => `${b.dateFor} ${b.timeFor ?? ''}`.localeCompare(`${a.dateFor} ${a.timeFor ?? ''}`));
+  const config = await getConfig();
+  return JSON.stringify({ entries, config, exportedAt: new Date().toISOString() }, null, 2);
 }
 
 export async function importData(jsonStr: string): Promise<{ count: number }> {
-  return await apiRequest<{ count: number }>('/import/json', {
-    method: 'POST',
-    body: jsonStr,
-  });
+  const result = await importLocalData(jsonStr);
+  const imported = JSON.parse(jsonStr) as { entries?: Array<Partial<DiaryEntry>> };
+  const ids = new Set(imported.entries?.map(entry => entry.id).filter((id): id is string => typeof id === 'string') ?? []);
+  const entries = ids.size > 0
+    ? (await db.entries.bulkGet(Array.from(ids))).filter((entry): entry is DiaryEntry => Boolean(entry))
+    : await db.entries.toArray();
+
+  for (const entry of entries) {
+    const next = { ...entry, syncStatus: 'pending' as const, serverVersion: entry.serverVersion ?? 0 };
+    await saveLocalEntry(next);
+    await enqueueMutation({
+      entityType: 'entry',
+      entityId: next.id,
+      op: 'update',
+      payload: entryPayload(next),
+      baseVersion: next.serverVersion ?? 0,
+    });
+  }
+  triggerSyncSoon();
+  return result;
 }
 
 export async function getCategories(): Promise<Array<{ id: string; name: string; entryCount?: number }>> {
-  const data = await apiRequest<CategoriesResponse>('/categories');
-  return data.categories;
+  const categories = await getLocalCategories();
+  const entries = await getLocalEntries();
+  return categories.map(category => ({
+    id: category.id,
+    name: category.name,
+    entryCount: entries.filter(entry => entry.tags.includes(category.name)).length,
+  }));
 }
 
 export async function createCategory(name: string): Promise<void> {
-  await apiRequest('/categories', {
-    method: 'POST',
-    body: jsonBody({ name }),
+  const cleanName = name.trim();
+  if (!cleanName) return;
+  const existing = await getLocalCategories();
+  if (existing.some(category => category.name === cleanName)) return;
+  const now = new Date().toISOString();
+  const category: LocalCategory = {
+    id: crypto.randomUUID ? crypto.randomUUID() : `cat_${Date.now()}`,
+    name: cleanName,
+    sortOrder: existing.length,
+    createdAt: now,
+    updatedAt: now,
+    serverVersion: 0,
+    syncStatus: 'pending',
+  };
+  await putLocalCategory(category);
+  await enqueueMutation({
+    entityType: 'category',
+    entityId: category.id,
+    op: 'create',
+    payload: category,
+    baseVersion: 0,
   });
+  triggerSyncSoon();
 }
 
 export async function renameCategoryByName(oldName: string, newName: string): Promise<void> {
-  const category = (await getCategories()).find(item => item.name === oldName);
+  const cleanOld = oldName.trim();
+  const cleanNew = newName.trim();
+  if (!cleanOld || !cleanNew || cleanOld === cleanNew) return;
+  const categories = await getLocalCategories();
+  const category = categories.find(item => item.name === cleanOld);
   if (!category) return;
-  await apiRequest(`/categories/${encodeURIComponent(category.id)}`, {
-    method: 'PUT',
-    body: jsonBody({ name: newName }),
+  const next = { ...category, name: cleanNew, updatedAt: new Date().toISOString(), syncStatus: 'pending' as const };
+  await putLocalCategory(next);
+
+  const entries = await db.entries.filter(entry => entry.tags.includes(cleanOld)).toArray();
+  for (const entry of entries) {
+    const updated = {
+      ...entry,
+      tags: entry.tags.map(tag => tag === cleanOld ? cleanNew : tag),
+      updatedAt: new Date().toISOString(),
+      syncStatus: 'pending' as const,
+    };
+    await saveLocalEntry(updated);
+    await enqueueMutation({
+      entityType: 'entry',
+      entityId: updated.id,
+      op: 'update',
+      payload: entryPayload(updated),
+      baseVersion: entry.serverVersion ?? 0,
+    });
+  }
+
+  await enqueueMutation({
+    entityType: 'category',
+    entityId: next.id,
+    op: 'update',
+    payload: next,
+    baseVersion: category.serverVersion ?? 0,
   });
+  triggerSyncSoon();
 }
 
 export async function deleteCategoryByName(name: string): Promise<void> {
-  const category = (await getCategories()).find(item => item.name === name);
+  const cleanName = name.trim();
+  if (!cleanName) return;
+  const category = (await getLocalCategories()).find(item => item.name === cleanName);
   if (!category) return;
-  await apiRequest(`/categories/${encodeURIComponent(category.id)}`, {
-    method: 'DELETE',
+
+  await deleteLocalCategory(category.id);
+  const entries = await db.entries.filter(entry => entry.tags.includes(cleanName)).toArray();
+  for (const entry of entries) {
+    const updated = {
+      ...entry,
+      tags: entry.tags.filter(tag => tag !== cleanName),
+      updatedAt: new Date().toISOString(),
+      syncStatus: 'pending' as const,
+    };
+    await saveLocalEntry(updated);
+    await enqueueMutation({
+      entityType: 'entry',
+      entityId: updated.id,
+      op: 'update',
+      payload: entryPayload(updated),
+      baseVersion: entry.serverVersion ?? 0,
+    });
+  }
+
+  await enqueueMutation({
+    entityType: 'category',
+    entityId: category.id,
+    op: 'delete',
+    payload: { id: category.id },
+    baseVersion: category.serverVersion ?? 0,
   });
+  triggerSyncSoon();
 }
 
-function isNotFound(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'status' in error && (error as { status: unknown }).status === 404;
+export async function getSyncStatusSnapshot(): Promise<SyncStatusSnapshot> {
+  const syncState = getSyncState();
+  return {
+    pendingCount: await getPendingSyncCount(),
+    lastSyncedAt: syncState.lastSyncedAt,
+    lastError: syncState.lastError,
+    isSyncing: syncState.isSyncing,
+  };
+}
+
+export async function syncNow(): Promise<SyncStatusSnapshot> {
+  await triggerSync({ immediate: true });
+  return await getSyncStatusSnapshot();
 }
 
 export function getApiBaseUrl(): string {
-  return API_BASE_URL;
+  return 'local-first';
 }
+
+function triggerSyncSoon(): void {
+  triggerSync().catch(error => {
+    console.warn('后台同步失败:', error);
+  });
+}
+
+function isMood(value: unknown): value is MoodType {
+  return typeof value === 'string' && value in MOOD_CONFIG;
+}
+
+function isWeather(value: unknown): value is WeatherType {
+  return typeof value === 'string' && value in WEATHER_CONFIG;
+}
+
+function htmlToText(html: string): string {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  return tmp.innerText;
+}
+
+void ensureDefaultCategories();

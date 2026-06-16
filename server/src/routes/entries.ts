@@ -210,7 +210,7 @@ export async function registerEntryRoutes(app: FastifyInstance): Promise<void> {
     const now = nowIso();
     app.db.prepare(`
       UPDATE entries
-      SET is_deleted = 1, deleted_at = ?, updated_at = ?
+      SET is_deleted = 1, deleted_at = ?, updated_at = ?, server_version = server_version + 1
       WHERE user_id = ? AND id = ?
     `).run(now, now, userId, id);
     return reply.status(204).send();

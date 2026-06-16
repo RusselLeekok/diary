@@ -600,19 +600,20 @@ function buildEntriesHTML(entries: DiaryEntrySummary[]): string {
   const totalEntries = entries.length;
   const visibleEntries = entries.slice(0, visibleEntryCount);
 
-  // 按日期分组
+  // 按月份分组
   const groups = new Map<string, DiaryEntrySummary[]>();
   visibleEntries.forEach(e => {
-    if (!groups.has(e.dateFor)) groups.set(e.dateFor, []);
-    groups.get(e.dateFor)!.push(e);
+    const monthKey = e.dateFor.slice(0, 7);
+    if (!groups.has(monthKey)) groups.set(monthKey, []);
+    groups.get(monthKey)!.push(e);
   });
 
-  const groupsHTML = Array.from(groups.entries()).map(([date, items]) => {
-    const [y, m, dd] = date.split('-');
+  const groupsHTML = Array.from(groups.entries()).map(([month, items]) => {
+    const [y, m] = month.split('-');
     return `
       <div class="entry-group">
         <div class="group-header">
-          <span class="group-date">${y}年${parseInt(m)}月${parseInt(dd)}日</span>
+          <span class="group-date">${y}年${parseInt(m)}月</span>
           <span class="group-count">${items.length}篇</span>
         </div>
         <div class="cards-grid">

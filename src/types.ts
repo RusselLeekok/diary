@@ -79,6 +79,10 @@ export interface DiaryEntry {
   isDeleted?: boolean;    // 是否已被删除到垃圾箱
   weather?: WeatherType;
   location?: string;
+  deletedAt?: string;
+  serverVersion?: number;
+  syncStatus?: 'synced' | 'pending' | 'conflict';
+  lastSyncedAt?: string;
 }
 
 export interface DiaryEntrySummary {
@@ -97,6 +101,9 @@ export interface DiaryEntrySummary {
   weather?: WeatherType;
   location?: string;
   firstImageSrc?: string;
+  serverVersion?: number;
+  syncStatus?: 'synced' | 'pending' | 'conflict';
+  deletedAt?: string;
 }
 
 // 应用配置

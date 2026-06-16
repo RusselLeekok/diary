@@ -11,6 +11,7 @@ import {
   renameCategoryByName,
   setConfigItem,
 } from '../services/databaseService';
+import { triggerSync } from '../services/syncService';
 
 // ==================== 全局状态 ====================
 
@@ -57,7 +58,10 @@ export async function initStore(): Promise<void> {
         await setConfigItem('categories', state.config.categories);
       }
       refreshTags();
-      void refreshEntrySummaries().catch(error => {
+      await triggerSync({ immediate: true }).catch(error => {
+        console.warn('启动云同步失败:', error);
+      });
+      await refreshEntries().catch(error => {
         console.error('初始化日记摘要失败:', error);
       });
     } catch (error) {
@@ -83,7 +87,10 @@ export async function loadUserData(): Promise<void> {
       await setConfigItem('categories', state.config.categories);
     }
     refreshTags();
-    await refreshEntrySummaries();
+    await triggerSync({ immediate: true }).catch(error => {
+      console.warn('登录后云同步失败:', error);
+    });
+    await refreshEntries();
     if (!state.config.hasPassword) {
       state.isUnlocked = true;
     }

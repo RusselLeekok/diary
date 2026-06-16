@@ -32,6 +32,8 @@ function migrate(db: Database): void {
       font_size TEXT NOT NULL DEFAULT 'md',
       auto_save_interval INTEGER NOT NULL DEFAULT 30,
       updated_at TEXT NOT NULL,
+      server_version INTEGER NOT NULL DEFAULT 1,
+      client_updated_at TEXT,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
@@ -42,6 +44,9 @@ function migrate(db: Database): void {
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
+      deleted_at TEXT,
+      server_version INTEGER NOT NULL DEFAULT 1,
+      client_updated_at TEXT,
       UNIQUE(user_id, name),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -64,14 +69,40 @@ function migrate(db: Database): void {
       deleted_at TEXT,
       weather TEXT,
       location TEXT,
+      server_version INTEGER NOT NULL DEFAULT 1,
+      client_updated_at TEXT,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS devices (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      name TEXT,
+      created_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS sync_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      mutation_id TEXT,
+      user_id TEXT NOT NULL,
+      device_id TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      op TEXT NOT NULL,
+      server_version INTEGER NOT NULL,
+      payload_json TEXT,
+      created_at TEXT NOT NULL,
+      UNIQUE(user_id, mutation_id)
     );
 
     CREATE INDEX IF NOT EXISTS idx_entries_user_date ON entries(user_id, is_deleted, date_for DESC, time_for DESC, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_entries_user_deleted ON entries(user_id, is_deleted, deleted_at DESC, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_entries_user_mood ON entries(user_id, is_deleted, mood);
     CREATE INDEX IF NOT EXISTS idx_entries_user_category ON entries(user_id, is_deleted, category_id);
+    CREATE INDEX IF NOT EXISTS idx_sync_log_user_id ON sync_log(user_id, id);
   `);
 
   try {
@@ -104,6 +135,22 @@ function migrate(db: Database): void {
   } catch (e) {
     // column already exists
   }
+  const syncColumns = [
+    'ALTER TABLE settings ADD COLUMN server_version INTEGER NOT NULL DEFAULT 1;',
+    'ALTER TABLE settings ADD COLUMN client_updated_at TEXT;',
+    'ALTER TABLE categories ADD COLUMN deleted_at TEXT;',
+    'ALTER TABLE categories ADD COLUMN server_version INTEGER NOT NULL DEFAULT 1;',
+    'ALTER TABLE categories ADD COLUMN client_updated_at TEXT;',
+    'ALTER TABLE entries ADD COLUMN server_version INTEGER NOT NULL DEFAULT 1;',
+    'ALTER TABLE entries ADD COLUMN client_updated_at TEXT;',
+  ];
+  syncColumns.forEach(sql => {
+    try {
+      db.exec(sql);
+    } catch (e) {
+      // column already exists
+    }
+  });
 }
 
 function seedDefaultUser(db: Database): void {

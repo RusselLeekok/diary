@@ -135,7 +135,7 @@ export async function registerTrashRoutes(app: FastifyInstance): Promise<void> {
 
     app.db.prepare(`
       UPDATE entries
-      SET is_deleted = 0, deleted_at = NULL, updated_at = ?
+      SET is_deleted = 0, deleted_at = NULL, updated_at = ?, server_version = server_version + 1
       WHERE user_id = ? AND id = ?
     `).run(nowIso(), userId, id);
 

@@ -4,10 +4,45 @@ import { DEFAULT_CONFIG, MOOD_CONFIG, WEATHER_CONFIG } from '../types';
 import { countWords, toDateString } from '../utils/dateUtils';
 import { sanitizeDiaryContent } from '../utils/htmlUtils';
 
+export type SyncStatus = 'synced' | 'pending' | 'conflict';
+export type SyncEntityType = 'entry' | 'category' | 'setting';
+export type SyncOperation = 'create' | 'update' | 'delete';
+
+export interface LocalCategory {
+  id: string;
+  name: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+  serverVersion?: number;
+  syncStatus?: SyncStatus;
+  lastSyncedAt?: string;
+}
+
+export interface SyncOutboxMutation {
+  mutationId: string;
+  entityType: SyncEntityType;
+  entityId: string;
+  op: SyncOperation;
+  payload: unknown;
+  baseVersion: number;
+  createdAt: string;
+  retryCount: number;
+}
+
+export interface SyncMeta {
+  key: string;
+  value: unknown;
+}
+
 // 定义数据库类
 class DiaryDatabase extends Dexie {
   entries!: Table<DiaryEntry, string>;
   config!: Table<{ key: string; value: unknown }, string>;
+  categories!: Table<LocalCategory, string>;
+  outbox!: Table<SyncOutboxMutation, string>;
+  syncMeta!: Table<SyncMeta, string>;
 
   constructor() {
     super('DiaryAppDB');
@@ -15,10 +50,112 @@ class DiaryDatabase extends Dexie {
       entries: 'id, dateFor, mood, createdAt, updatedAt',
       config: 'key',
     });
+    this.version(2).stores({
+      entries: 'id, dateFor, mood, createdAt, updatedAt, syncStatus, serverVersion, deletedAt',
+      config: 'key',
+      categories: 'id, name, sortOrder, updatedAt, syncStatus, serverVersion, deletedAt',
+      outbox: 'mutationId, entityType, entityId, op, createdAt, retryCount',
+      syncMeta: 'key',
+    });
   }
 }
 
 export const db = new DiaryDatabase();
+
+const DEFAULT_CATEGORY_NAMES = ['生活', '工作', '心情', '随笔'];
+
+export async function ensureDefaultCategories(): Promise<LocalCategory[]> {
+  const existing = await db.categories.filter(category => !category.deletedAt).toArray();
+  if (existing.length > 0) return existing.sort(compareCategories);
+
+  const now = new Date().toISOString();
+  const categories = DEFAULT_CATEGORY_NAMES.map((name, index) => ({
+    id: `local_cat_${index + 1}`,
+    name,
+    sortOrder: index,
+    createdAt: now,
+    updatedAt: now,
+    serverVersion: 0,
+    syncStatus: 'synced' as SyncStatus,
+  }));
+  await db.categories.bulkPut(categories);
+  return categories;
+}
+
+export async function getLocalCategories(): Promise<LocalCategory[]> {
+  await ensureDefaultCategories();
+  return (await db.categories.filter(category => !category.deletedAt).toArray()).sort(compareCategories);
+}
+
+export async function putLocalCategory(category: LocalCategory): Promise<void> {
+  await db.categories.put(category);
+}
+
+export async function deleteLocalCategory(id: string): Promise<void> {
+  await db.categories.delete(id);
+}
+
+function compareCategories(a: LocalCategory, b: LocalCategory): number {
+  return a.sortOrder - b.sortOrder || a.name.localeCompare(b.name);
+}
+
+export async function getSyncMeta<T = unknown>(key: string): Promise<T | undefined> {
+  return (await db.syncMeta.get(key))?.value as T | undefined;
+}
+
+export async function setSyncMeta(key: string, value: unknown): Promise<void> {
+  await db.syncMeta.put({ key, value });
+}
+
+export async function getOrCreateDeviceId(): Promise<string> {
+  const existing = await getSyncMeta<string>('deviceId');
+  if (existing) return existing;
+  const deviceId = `device_${generateImportId()}`;
+  await setSyncMeta('deviceId', deviceId);
+  return deviceId;
+}
+
+export async function enqueueMutation(mutation: Omit<SyncOutboxMutation, 'mutationId' | 'createdAt' | 'retryCount'> & {
+  mutationId?: string;
+  createdAt?: string;
+  retryCount?: number;
+}): Promise<SyncOutboxMutation> {
+  const item: SyncOutboxMutation = {
+    mutationId: mutation.mutationId ?? `mut_${generateImportId()}`,
+    entityType: mutation.entityType,
+    entityId: mutation.entityId,
+    op: mutation.op,
+    payload: mutation.payload,
+    baseVersion: mutation.baseVersion,
+    createdAt: mutation.createdAt ?? new Date().toISOString(),
+    retryCount: mutation.retryCount ?? 0,
+  };
+  await db.outbox.put(item);
+  return item;
+}
+
+export async function getOutboxMutations(limit = 100): Promise<SyncOutboxMutation[]> {
+  return await db.outbox.orderBy('createdAt').limit(limit).toArray();
+}
+
+export async function removeOutboxMutations(ids: string[]): Promise<void> {
+  if (ids.length > 0) await db.outbox.bulkDelete(ids);
+}
+
+export async function incrementOutboxRetries(ids: string[]): Promise<void> {
+  await db.transaction('rw', db.outbox, async () => {
+    for (const id of ids) {
+      const mutation = await db.outbox.get(id);
+      if (mutation) {
+        await db.outbox.put({ ...mutation, retryCount: mutation.retryCount + 1 });
+      }
+    }
+  });
+}
+
+export async function getPendingSyncCount(): Promise<number> {
+  return await db.outbox.count();
+}
 
 // ==================== 日记 CRUD ====================
 
@@ -103,7 +240,8 @@ export async function filterEntries(params: {
 /** 获取所有标签（去重） */
 export async function getAllTags(): Promise<string[]> {
   const entries = await db.entries.toArray();
-  const tagSet = new Set<string>();
+  const categories = await getLocalCategories();
+  const tagSet = new Set<string>(categories.map(category => category.name));
   entries.forEach(e => e.tags.forEach(t => tagSet.add(t)));
   return Array.from(tagSet).sort();
 }
@@ -239,7 +377,26 @@ function summarizeStatsEntries(entries: DiaryEntry[], timelineEntries: StatsTime
     moodCount,
     timelineEntries,
     weekdayEntries,
+    maxStreak: calculateMaxStreak(activeDateSet),
   };
+}
+
+function calculateMaxStreak(dateSet: Set<string>): number {
+  let maxStreak = 0;
+  let tempStreak = 0;
+  const sortedDates = Array.from(dateSet).sort();
+  for (let i = 0; i < sortedDates.length; i++) {
+    if (i === 0) {
+      tempStreak = 1;
+    } else {
+      const prev = new Date(sortedDates[i - 1]);
+      const curr = new Date(sortedDates[i]);
+      const diff = (curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24);
+      tempStreak = diff === 1 ? tempStreak + 1 : 1;
+    }
+    maxStreak = Math.max(maxStreak, tempStreak);
+  }
+  return maxStreak;
 }
 
 function buildDailyTimeline(entries: DiaryEntry[], today: Date, days: number): StatsTimelineEntry[] {
@@ -326,6 +483,7 @@ export async function getConfig(): Promise<AppConfig> {
       (config as Record<string, unknown>)[key] = row.value;
     }
   }
+  config.categories = (await getLocalCategories()).map(category => category.name);
   return config;
 }
 

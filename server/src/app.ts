@@ -12,6 +12,7 @@ import { registerEntryRoutes } from './routes/entries.js';
 import { registerTrashRoutes } from './routes/trash.js';
 import { registerStatsRoutes } from './routes/stats.js';
 import { registerImportExportRoutes } from './routes/importExport.js';
+import { registerSyncRoutes } from './routes/sync.js';
 
 export interface BuildAppOptions {
   db?: Database;
@@ -101,6 +102,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerTrashRoutes(app);
   await registerStatsRoutes(app);
   await registerImportExportRoutes(app);
+  await registerSyncRoutes(app);
 
   return app;
 }

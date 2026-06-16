@@ -83,26 +83,19 @@ async function bootstrap(): Promise<void> {
   registerAppRoutes(mainEl);
   const topbarEl = document.getElementById('app-topbar')!;
 
-  const storeReady = initStore().catch(error => {
-    console.error('初始化本地状态失败:', error);
-  });
-
-  renderTopbar(topbarEl);
-  initRouter();
-
-  void checkAuth()
-    .then(() => {
-      renderTopbar(topbarEl);
-    })
-    .catch(error => {
+  await Promise.all([
+    checkAuth().catch(error => {
       console.error('登录状态校验失败:', error);
-    });
+    }),
+    initStore().catch(error => {
+      console.error('初始化本地状态失败:', error);
+    }),
+  ]);
 
-  void storeReady.then(() => {
-    persistConfiguredAppearanceFallback();
-    applyAppearance();
-    renderTopbar(topbarEl);
-  });
+  persistConfiguredAppearanceFallback();
+  applyAppearance();
+  initRouter();
+  renderTopbar(topbarEl);
 }
 
 bootstrap().catch(err => {

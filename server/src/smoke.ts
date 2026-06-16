@@ -78,6 +78,95 @@ try {
   const settings = await request('PATCH', '/api/v1/settings', { theme: 'dark', fontSize: 'lg' });
   assert(settings.body.theme === 'dark' && settings.body.fontSize === 'lg', 'settings update failed');
 
+  const syncCreatePayload = {
+    deviceId: 'smoke-device-a',
+    sinceCursor: '0',
+    mutations: [{
+      mutationId: 'smoke-mut-create-entry',
+      entityType: 'entry',
+      entityId: 'smoke-sync-entry',
+      op: 'create',
+      baseVersion: 0,
+      clientUpdatedAt: new Date().toISOString(),
+      payload: {
+        id: 'smoke-sync-entry',
+        title: '同步创建测试',
+        contentHtml: '<p>来自设备 A。</p>',
+        mood: 'happy',
+        tags: [],
+        dateFor: '2026-06-13',
+        timeFor: '09:00',
+        isLocked: false,
+      },
+    }],
+  };
+
+  const syncCreate = await request('POST', '/api/v1/sync', syncCreatePayload);
+  assert(syncCreate.body.applied.length === 1, 'sync create was not applied');
+  assert(syncCreate.body.applied[0].serverVersion === 1, 'sync create version mismatch');
+
+  const syncCreateAgain = await request('POST', '/api/v1/sync', syncCreatePayload);
+  assert(syncCreateAgain.body.applied.length === 1, 'sync idempotency did not return applied mutation');
+
+  const deviceBPull = await request('POST', '/api/v1/sync', {
+    deviceId: 'smoke-device-b',
+    sinceCursor: '0',
+    mutations: [],
+  });
+  assert(
+    deviceBPull.body.changes.entries.some((item: any) => item.id === 'smoke-sync-entry'),
+    'device B did not pull synced entry',
+  );
+
+  const staleUpdate = await request('POST', '/api/v1/sync', {
+    deviceId: 'smoke-device-b',
+    sinceCursor: deviceBPull.body.cursor,
+    mutations: [{
+      mutationId: 'smoke-mut-stale-update',
+      entityType: 'entry',
+      entityId: 'smoke-sync-entry',
+      op: 'update',
+      baseVersion: 0,
+      clientUpdatedAt: new Date().toISOString(),
+      payload: {
+        id: 'smoke-sync-entry',
+        title: '过期更新',
+        contentHtml: '<p>这个更新应该冲突。</p>',
+        mood: 'sad',
+        tags: [],
+        dateFor: '2026-06-13',
+        isLocked: false,
+      },
+    }],
+  });
+  assert(staleUpdate.body.conflicts.length === 1, 'stale sync update did not return conflict');
+
+  const beforeDeleteCursor = deviceBPull.body.cursor;
+  const syncDelete = await request('POST', '/api/v1/sync', {
+    deviceId: 'smoke-device-a',
+    sinceCursor: beforeDeleteCursor,
+    mutations: [{
+      mutationId: 'smoke-mut-delete-entry',
+      entityType: 'entry',
+      entityId: 'smoke-sync-entry',
+      op: 'delete',
+      baseVersion: 1,
+      clientUpdatedAt: new Date().toISOString(),
+      payload: { id: 'smoke-sync-entry' },
+    }],
+  });
+  assert(syncDelete.body.applied.length === 1, 'sync delete was not applied');
+
+  const deviceBPullDelete = await request('POST', '/api/v1/sync', {
+    deviceId: 'smoke-device-b',
+    sinceCursor: beforeDeleteCursor,
+    mutations: [],
+  });
+  assert(
+    deviceBPullDelete.body.changes.tombstones.some((item: any) => item.entityId === 'smoke-sync-entry'),
+    'device B did not pull delete tombstone',
+  );
+
   console.log('server smoke passed');
 } finally {
   await app.close();
