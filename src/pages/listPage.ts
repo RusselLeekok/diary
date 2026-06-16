@@ -38,6 +38,25 @@ let selectedDate: string | null = null;
 let selectedCategory: string | null = null;  // null=全部, ''=未分类, 'xxx'=具体分类
 let currentEntries: DiaryEntrySummary[] = [];
 let sidebarTab: 'calendar' | 'category' = 'category';
+let calDocClickHandler: ((e: Event) => void) | null = null;
+
+function getWrittenYears(): number[] {
+  const years = new Set<number>();
+  const allEntries = getEntries();
+  allEntries.forEach(e => {
+    const match = e.dateFor.match(/^(\d{4})-/);
+    if (match) {
+      years.add(parseInt(match[1], 10));
+    }
+  });
+  years.add(calYear);
+  const thisYear = new Date().getFullYear();
+  years.add(thisYear);
+  if (years.size <= 1) {
+    years.add(thisYear - 1);
+  }
+  return Array.from(years).sort((a, b) => b - a);
+}
 
 // 搜索筛选状态
 let searchKeyword = '';
@@ -432,6 +451,19 @@ function buildCalendarHTML(): string {
   const monthNames = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
   const weekDays = ['日','一','二','三','四','五','六'];
 
+  const writtenYears = getWrittenYears();
+  let yearOptionsHTML = '';
+  writtenYears.forEach(y => {
+    const isActive = y === calYear;
+    yearOptionsHTML += `<button class="dt-select-option ${isActive ? 'active' : ''}" data-value="${y}" type="button">${y}年</button>`;
+  });
+
+  let monthOptionsHTML = '';
+  for (let m = 0; m < 12; m++) {
+    const isActive = m === calMonth;
+    monthOptionsHTML += `<button class="dt-select-option ${isActive ? 'active' : ''}" data-value="${m}" type="button">${monthNames[m]}</button>`;
+  }
+
   let cells = '';
   for (let i = firstDay - 1; i >= 0; i--) {
     cells += `<div class="cal-day other-month"><span class="cal-day-num">${prevDays - i}</span></div>`;
@@ -459,7 +491,20 @@ function buildCalendarHTML(): string {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
       <div class="cal-title-wrap">
-        <span class="cal-title">${calYear}年 ${monthNames[calMonth]}</span>
+        <div class="cal-title" style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+          <div class="dt-select-wrapper" id="cal-year-wrapper">
+            <button class="dt-select-trigger" id="cal-year-trigger" type="button" style="font-family:var(--font-content);font-size:0.9rem;font-weight:600;padding:2px 14px 2px 8px">${calYear}年</button>
+            <div class="dt-select-dropdown" id="cal-year-dropdown" style="display:none;">
+              ${yearOptionsHTML}
+            </div>
+          </div>
+          <div class="dt-select-wrapper" id="cal-month-wrapper">
+            <button class="dt-select-trigger" id="cal-month-trigger" type="button" style="font-family:var(--font-content);font-size:0.9rem;font-weight:600;padding:2px 14px 2px 8px">${monthNames[calMonth]}</button>
+            <div class="dt-select-dropdown" id="cal-month-dropdown" style="display:none;">
+              ${monthOptionsHTML}
+            </div>
+          </div>
+        </div>
         <button class="btn cal-today-btn" id="cal-goto-today">今天</button>
       </div>
       <button class="cal-nav-btn" id="cal-next">
@@ -895,6 +940,70 @@ function bindCalendarEvents(container: HTMLElement): void {
     resetVisibleEntryCount();
     refreshCalendar(container); refreshContent(container);
   });
+
+  // ======= 绑定日历年月下拉菜单 =======
+  const yearTrigger = container.querySelector('#cal-year-trigger') as HTMLButtonElement | null;
+  const yearDropdown = container.querySelector('#cal-year-dropdown') as HTMLElement | null;
+  const monthTrigger = container.querySelector('#cal-month-trigger') as HTMLButtonElement | null;
+  const monthDropdown = container.querySelector('#cal-month-dropdown') as HTMLElement | null;
+
+  yearTrigger?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (monthDropdown) monthDropdown.style.display = 'none';
+    if (yearDropdown) {
+      const isHidden = yearDropdown.style.display === 'none';
+      yearDropdown.style.display = isHidden ? 'flex' : 'none';
+      if (isHidden) {
+        const activeOpt = yearDropdown.querySelector('.dt-select-option.active') as HTMLElement | null;
+        if (activeOpt) {
+          yearDropdown.scrollTop = activeOpt.offsetTop - yearDropdown.clientHeight / 2 + activeOpt.clientHeight / 2;
+        }
+      }
+    }
+  });
+
+  monthTrigger?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (yearDropdown) yearDropdown.style.display = 'none';
+    if (monthDropdown) {
+      const isHidden = monthDropdown.style.display === 'none';
+      monthDropdown.style.display = isHidden ? 'flex' : 'none';
+      if (isHidden) {
+        const activeOpt = monthDropdown.querySelector('.dt-select-option.active') as HTMLElement | null;
+        if (activeOpt) {
+          monthDropdown.scrollTop = activeOpt.offsetTop - monthDropdown.clientHeight / 2 + activeOpt.clientHeight / 2;
+        }
+      }
+    }
+  });
+
+  yearDropdown?.querySelectorAll('.dt-select-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      const val = Number((opt as HTMLElement).dataset.value);
+      calYear = val;
+      if (yearDropdown) yearDropdown.style.display = 'none';
+      refreshCalendar(container);
+    });
+  });
+
+  monthDropdown?.querySelectorAll('.dt-select-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      const val = Number((opt as HTMLElement).dataset.value);
+      calMonth = val;
+      if (monthDropdown) monthDropdown.style.display = 'none';
+      refreshCalendar(container);
+    });
+  });
+
+  if (calDocClickHandler) {
+    document.removeEventListener('click', calDocClickHandler);
+  }
+  calDocClickHandler = () => {
+    if (yearDropdown) yearDropdown.style.display = 'none';
+    if (monthDropdown) monthDropdown.style.display = 'none';
+  };
+  document.addEventListener('click', calDocClickHandler);
+
   bindCalDayClick(container);
 }
 

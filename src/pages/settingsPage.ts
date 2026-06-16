@@ -47,6 +47,284 @@ function downloadTextFile(content: string, filename: string, mimeType = 'text/pl
   URL.revokeObjectURL(url);
 }
 
+function parseDateValue(value: string): Date {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function addMonths(date: Date, count: number): Date {
+  return new Date(date.getFullYear(), date.getMonth() + count, 1);
+}
+
+function getYearDropdownOptions(selectedYear: number, field: 'start' | 'end'): string {
+  const currentYear = new Date().getFullYear();
+  const startYear = Math.min(2000, selectedYear);
+  const endYear = Math.max(currentYear + 1, selectedYear);
+  let options = '';
+
+  for (let year = endYear; year >= startYear; year--) {
+    options += `
+      <button type="button" class="dt-select-option export-range-dropdown-option ${year === selectedYear ? 'active' : ''}"
+        data-calendar-field="${field}" data-picker-type="year" data-picker-value="${year}">
+        ${year}年
+      </button>
+    `;
+  }
+
+  return options;
+}
+
+function getMonthDropdownOptions(selectedMonth: number, field: 'start' | 'end'): string {
+  return Array.from({ length: 12 }, (_, index) => `
+    <button type="button" class="dt-select-option export-range-dropdown-option ${index === selectedMonth ? 'active' : ''}"
+      data-calendar-field="${field}" data-picker-type="month" data-picker-value="${index}">
+      ${index + 1}月
+    </button>
+  `).join('');
+}
+
+function getCalendarDropdownHtml(type: 'year' | 'month', field: 'start' | 'end', value: number): string {
+  const label = type === 'year' ? `${value}年` : `${value + 1}月`;
+  const options = type === 'year'
+    ? getYearDropdownOptions(value, field)
+    : getMonthDropdownOptions(value, field);
+
+  return `
+    <div class="dt-select-wrapper export-range-dropdown" data-calendar-field="${field}" data-picker-type="${type}" style="position:relative">
+      <button type="button" class="dt-select-trigger export-range-dropdown-trigger" data-dropdown-trigger="true"
+        data-calendar-field="${field}" data-picker-type="${type}" aria-haspopup="listbox" aria-expanded="false"
+        style="font-family:var(--font-content);font-size:0.78rem;font-weight:600;padding:0 12px;min-height:28px">
+        <span>${label}</span>
+      </button>
+      <div class="dt-select-dropdown export-range-dropdown-menu" role="listbox" style="min-width:80px">
+        ${options}
+      </div>
+    </div>
+  `;
+}
+
+function getDateRangePickerHtml(customId: string, startId: string, endId: string): string {
+  const defaultStart = getNDaysAgo(29);
+  const defaultEnd = today();
+  const startMonth = parseDateValue(defaultStart);
+  const endMonth = parseDateValue(defaultEnd);
+
+  return `
+    <div class="custom-date-section export-date-section" id="custom-container-${customId}">
+      <input type="hidden" id="${startId}" value="${defaultStart}" />
+      <input type="hidden" id="${endId}" value="${defaultEnd}" />
+      <div class="export-date-range-card" id="range-picker-${customId}"
+        data-start-year="${startMonth.getFullYear()}"
+        data-start-month="${startMonth.getMonth()}"
+        data-end-year="${endMonth.getFullYear()}"
+        data-end-month="${endMonth.getMonth()}">
+        <div class="export-date-range-fields">
+          <div class="export-range-field">
+            <span>开始日期</span>
+            <strong data-range-label="start">${defaultStart}</strong>
+          </div>
+          <span class="export-range-arrow">至</span>
+          <div class="export-range-field">
+            <span>结束日期</span>
+            <strong data-range-label="end">${defaultEnd}</strong>
+          </div>
+        </div>
+        <div class="export-range-quick">
+          <button type="button" class="export-range-quick-btn" data-quick-days="7">最近7天</button>
+          <button type="button" class="export-range-quick-btn active" data-quick-days="30">最近30天</button>
+          <button type="button" class="export-range-quick-btn" data-quick-days="180">最近180天</button>
+        </div>
+        <div class="export-range-calendars"></div>
+      </div>
+    </div>
+  `;
+}
+
+function getCalendarMonthHtml(field: 'start' | 'end', year: number, month: number, startDate: string, endDate: string): string {
+  const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayValue = today();
+  let days = '';
+
+  for (let i = 0; i < firstDay; i++) {
+    days += '<span class="export-calendar-day export-calendar-day-empty"></span>';
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateValue = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const isStart = dateValue === startDate;
+    const isEnd = dateValue === endDate;
+    const isInRange = dateValue > startDate && dateValue < endDate;
+    const classes = [
+      'export-calendar-day',
+      dateValue === todayValue ? 'today' : '',
+      isStart ? 'range-start' : '',
+      isEnd ? 'range-end' : '',
+      isInRange ? 'in-range' : '',
+    ].filter(Boolean).join(' ');
+    days += `<button type="button" class="${classes}" data-date="${dateValue}">${day}</button>`;
+  }
+
+  return `
+    <div class="export-calendar-month" data-calendar-field="${field}">
+      <div class="export-calendar-title">${field === 'start' ? '开始日期' : '结束日期'}</div>
+      <div class="export-range-toolbar">
+        <button type="button" class="export-range-nav-btn" data-calendar-field="${field}" data-month-dir="-1" aria-label="上个月">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div class="export-range-month-selectors">
+          ${getCalendarDropdownHtml('year', field, year)}
+          ${getCalendarDropdownHtml('month', field, month)}
+        </div>
+        <button type="button" class="export-range-nav-btn" data-calendar-field="${field}" data-month-dir="1" aria-label="下个月">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+      <div class="export-calendar-weekdays">
+        ${weekdays.map(day => `<span>${day}</span>`).join('')}
+      </div>
+      <div class="export-calendar-grid">${days}</div>
+    </div>
+  `;
+}
+
+function bindExportDateRangePicker(modalEl: HTMLElement, customId: string, startId: string, endId: string): void {
+  const picker = modalEl.querySelector(`#range-picker-${customId}`) as HTMLElement | null;
+  const startInput = modalEl.querySelector(`#${startId}`) as HTMLInputElement | null;
+  const endInput = modalEl.querySelector(`#${endId}`) as HTMLInputElement | null;
+  if (!picker || !startInput || !endInput) return;
+
+  const renderCalendars = () => {
+    const startYear = Number(picker.dataset.startYear);
+    const startMonth = Number(picker.dataset.startMonth);
+    const endYear = Number(picker.dataset.endYear);
+    const endMonth = Number(picker.dataset.endMonth);
+    const calendars = picker.querySelector('.export-range-calendars') as HTMLElement;
+
+    calendars.innerHTML = [
+      getCalendarMonthHtml('start', startYear, startMonth, startInput.value, endInput.value),
+      getCalendarMonthHtml('end', endYear, endMonth, startInput.value, endInput.value),
+    ].join('');
+
+    picker.querySelector('[data-range-label="start"]')!.textContent = startInput.value;
+    picker.querySelector('[data-range-label="end"]')!.textContent = endInput.value;
+  };
+
+  picker.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    const navBtn = target.closest('.export-range-nav-btn') as HTMLElement | null;
+    const quickBtn = target.closest('.export-range-quick-btn') as HTMLElement | null;
+    const dropdownTrigger = target.closest('.export-range-dropdown-trigger') as HTMLElement | null;
+    const dropdownOption = target.closest('.export-range-dropdown-option') as HTMLElement | null;
+    const dayBtn = target.closest('[data-date]') as HTMLElement | null;
+
+    if (!dropdownTrigger) {
+      picker.querySelectorAll('.export-range-dropdown.open').forEach(item => {
+        item.classList.remove('open');
+        item.querySelector('.export-range-dropdown-trigger')?.setAttribute('aria-expanded', 'false');
+      });
+    }
+
+    if (dropdownTrigger) {
+      const dropdown = dropdownTrigger.closest('.export-range-dropdown') as HTMLElement | null;
+      const isOpen = dropdown?.classList.contains('open');
+      picker.querySelectorAll('.export-range-dropdown.open').forEach(item => {
+        item.classList.remove('open');
+        item.querySelector('.export-range-dropdown-trigger')?.setAttribute('aria-expanded', 'false');
+      });
+      if (dropdown && !isOpen) {
+        dropdown.classList.add('open');
+        dropdownTrigger.setAttribute('aria-expanded', 'true');
+      }
+      return;
+    }
+
+    if (dropdownOption) {
+      const field = dropdownOption.dataset.calendarField === 'end' ? 'end' : 'start';
+      const type = dropdownOption.dataset.pickerType === 'month' ? 'month' : 'year';
+      const value = dropdownOption.dataset.pickerValue || '0';
+
+      if (field === 'start') {
+        if (type === 'year') picker.dataset.startYear = value;
+        else picker.dataset.startMonth = value;
+      } else {
+        if (type === 'year') picker.dataset.endYear = value;
+        else picker.dataset.endMonth = value;
+      }
+
+      renderCalendars();
+      return;
+    }
+
+    if (navBtn) {
+      const field = navBtn.dataset.calendarField === 'end' ? 'end' : 'start';
+      const yearKey = field === 'start' ? 'startYear' : 'endYear';
+      const monthKey = field === 'start' ? 'startMonth' : 'endMonth';
+      const current = new Date(Number(picker.dataset[yearKey]), Number(picker.dataset[monthKey]), 1);
+      const next = addMonths(current, Number(navBtn.dataset.monthDir || 0));
+      picker.dataset[yearKey] = String(next.getFullYear());
+      picker.dataset[monthKey] = String(next.getMonth());
+      renderCalendars();
+      return;
+    }
+
+    if (quickBtn) {
+      const days = Number(quickBtn.dataset.quickDays || 30);
+      startInput.value = getNDaysAgo(days - 1);
+      endInput.value = today();
+      const nextStartMonth = parseDateValue(startInput.value);
+      const nextEndMonth = parseDateValue(endInput.value);
+      picker.dataset.startYear = String(nextStartMonth.getFullYear());
+      picker.dataset.startMonth = String(nextStartMonth.getMonth());
+      picker.dataset.endYear = String(nextEndMonth.getFullYear());
+      picker.dataset.endMonth = String(nextEndMonth.getMonth());
+      picker.querySelectorAll('.export-range-quick-btn').forEach(btn => btn.classList.remove('active'));
+      quickBtn.classList.add('active');
+      renderCalendars();
+      return;
+    }
+
+    if (dayBtn?.dataset.date) {
+      const dateValue = dayBtn.dataset.date;
+      const calendar = dayBtn.closest('.export-calendar-month') as HTMLElement | null;
+      const field = calendar?.dataset.calendarField === 'end' ? 'end' : 'start';
+      picker.querySelectorAll('.export-range-quick-btn').forEach(btn => btn.classList.remove('active'));
+      if (field === 'start') {
+        startInput.value = dateValue;
+        if (startInput.value > endInput.value) endInput.value = dateValue;
+      } else {
+        endInput.value = dateValue;
+        if (endInput.value < startInput.value) startInput.value = dateValue;
+      }
+      renderCalendars();
+    }
+  });
+
+  renderCalendars();
+}
+
+function bindExportModalInteractions(customId: string, startId: string, endId: string): void {
+  const modalEl = document.querySelector('.modal-overlay') as HTMLElement | null;
+  if (!modalEl) return;
+
+  const modalBox = modalEl.querySelector('.modal-box') as HTMLElement | null;
+  const options = modalEl.querySelectorAll('.export-modal-option');
+  const customContainer = modalEl.querySelector(`#custom-container-${customId}`) as HTMLElement | null;
+
+  bindExportDateRangePicker(modalEl, customId, startId, endId);
+
+  options.forEach(opt => {
+    opt.addEventListener('click', () => {
+      options.forEach(o => o.classList.remove('active'));
+      opt.classList.add('active');
+      const isCustom = (opt as HTMLElement).dataset.range === 'custom';
+      customContainer?.classList.toggle('active', isCustom);
+      modalBox?.classList.toggle('modal-box-wide', isCustom);
+    });
+  });
+}
+
 /** 设置页面 */
 export async function renderSettingsPage(mainEl: HTMLElement): Promise<void> {
   const config = getAppConfig();
@@ -611,29 +889,11 @@ function bindSettingsEvents(container: HTMLElement, mainEl: HTMLElement): void {
             <span class="export-modal-option-radio"></span>
             导出全部日记
           </div>
-          <div class="export-modal-option" data-range="7days">
-            <span class="export-modal-option-radio"></span>
-            导出最近 7 天的日记
-          </div>
-          <div class="export-modal-option" data-range="30days">
-            <span class="export-modal-option-radio"></span>
-            导出最近 30 天的日记
-          </div>
-          <div class="export-modal-option" data-range="thisyear">
-            <span class="export-modal-option-radio"></span>
-            导出今年日记（2026年）
-          </div>
           <div class="export-modal-option" data-range="custom">
             <span class="export-modal-option-radio"></span>
             自定义日期范围
           </div>
-          <div class="custom-date-section" id="custom-container-${customId}">
-            <div class="date-picker-row">
-              <input type="date" class="input-settings" id="${startId}" value="${getNDaysAgo(30)}" />
-              <span>至</span>
-              <input type="date" class="input-settings" id="${endId}" value="${today()}" />
-            </div>
-          </div>
+          ${getDateRangePickerHtml(customId, startId, endId)}
         </div>
       `,
       confirmText: '确认导出',
@@ -645,16 +905,7 @@ function bindSettingsEvents(container: HTMLElement, mainEl: HTMLElement): void {
         let startDate: string | undefined;
         let endDate: string | undefined;
 
-        if (range === '7days') {
-          startDate = getNDaysAgo(6);
-          endDate = today();
-        } else if (range === '30days') {
-          startDate = getNDaysAgo(29);
-          endDate = today();
-        } else if (range === 'thisyear') {
-          startDate = '2026-01-01';
-          endDate = '2026-12-31';
-        } else if (range === 'custom') {
+        if (range === 'custom') {
           startDate = (modalEl.querySelector(`#${startId}`) as HTMLInputElement).value;
           endDate = (modalEl.querySelector(`#${endId}`) as HTMLInputElement).value;
         }
@@ -672,24 +923,7 @@ function bindSettingsEvents(container: HTMLElement, mainEl: HTMLElement): void {
 
     // 绑定导出 Modal 内部事件
     setTimeout(() => {
-      const modalEl = document.querySelector('.modal-overlay') as HTMLElement;
-      if (!modalEl) return;
-
-      const options = modalEl.querySelectorAll('.export-modal-option');
-      const customContainer = modalEl.querySelector(`#custom-container-${customId}`) as HTMLElement;
-
-      options.forEach(opt => {
-        opt.addEventListener('click', () => {
-          options.forEach(o => o.classList.remove('active'));
-          opt.classList.add('active');
-          const range = (opt as HTMLElement).dataset.range;
-          if (range === 'custom') {
-            customContainer.classList.add('active');
-          } else {
-            customContainer.classList.remove('active');
-          }
-        });
-      });
+      bindExportModalInteractions(customId, startId, endId);
     }, 50);
   });
 
@@ -708,29 +942,11 @@ function bindSettingsEvents(container: HTMLElement, mainEl: HTMLElement): void {
             <span class="export-modal-option-radio"></span>
             导出全部日记
           </div>
-          <div class="export-modal-option" data-range="7days">
-            <span class="export-modal-option-radio"></span>
-            导出最近 7 天的日记
-          </div>
-          <div class="export-modal-option" data-range="30days">
-            <span class="export-modal-option-radio"></span>
-            导出最近 30 天的日记
-          </div>
-          <div class="export-modal-option" data-range="thisyear">
-            <span class="export-modal-option-radio"></span>
-            导出今年日记（2026年）
-          </div>
           <div class="export-modal-option" data-range="custom">
             <span class="export-modal-option-radio"></span>
             自定义日期范围
           </div>
-          <div class="custom-date-section" id="custom-container-${customId}">
-            <div class="date-picker-row">
-              <input type="date" class="input-settings" id="${startId}" value="${getNDaysAgo(30)}" />
-              <span>至</span>
-              <input type="date" class="input-settings" id="${endId}" value="${today()}" />
-            </div>
-          </div>
+          ${getDateRangePickerHtml(customId, startId, endId)}
         </div>
       `,
       confirmText: '确认导出',
@@ -742,16 +958,7 @@ function bindSettingsEvents(container: HTMLElement, mainEl: HTMLElement): void {
         let startDate: string | undefined;
         let endDate: string | undefined;
 
-        if (range === '7days') {
-          startDate = getNDaysAgo(6);
-          endDate = today();
-        } else if (range === '30days') {
-          startDate = getNDaysAgo(29);
-          endDate = today();
-        } else if (range === 'thisyear') {
-          startDate = '2026-01-01';
-          endDate = '2026-12-31';
-        } else if (range === 'custom') {
+        if (range === 'custom') {
           startDate = (modalEl.querySelector(`#${startId}`) as HTMLInputElement).value;
           endDate = (modalEl.querySelector(`#${endId}`) as HTMLInputElement).value;
         }
@@ -779,24 +986,7 @@ function bindSettingsEvents(container: HTMLElement, mainEl: HTMLElement): void {
 
     // 绑定 Markdown 导出 Modal 内部事件
     setTimeout(() => {
-      const modalEl = document.querySelector('.modal-overlay') as HTMLElement;
-      if (!modalEl) return;
-
-      const options = modalEl.querySelectorAll('.export-modal-option');
-      const customContainer = modalEl.querySelector(`#custom-container-${customId}`) as HTMLElement;
-
-      options.forEach(opt => {
-        opt.addEventListener('click', () => {
-          options.forEach(o => o.classList.remove('active'));
-          opt.classList.add('active');
-          const range = (opt as HTMLElement).dataset.range;
-          if (range === 'custom') {
-            customContainer.classList.add('active');
-          } else {
-            customContainer.classList.remove('active');
-          }
-        });
-      });
+      bindExportModalInteractions(customId, startId, endId);
     }, 50);
   });
 

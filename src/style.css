@@ -2485,6 +2485,9 @@ body {
   transform: scale(0.94) translateY(8px);
   transition: transform 0.28s var(--ease-spring);
 }
+.modal-box.modal-box-wide {
+  max-width: 680px;
+}
 .modal-overlay.modal-visible .modal-box { transform: scale(1) translateY(0); }
 
 .modal-title {
@@ -5348,6 +5351,347 @@ body {
 
 .custom-date-section.active {
   display: block;
+}
+
+.export-date-section {
+  padding: 14px;
+}
+
+.export-date-range-card {
+  position: relative;
+}
+
+.export-date-range-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+  margin-bottom: 14px;
+}
+
+.export-range-field {
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  font-family: var(--font-ui);
+}
+
+.export-range-field span {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.export-range-field strong {
+  font-size: 0.88rem;
+  color: inherit;
+}
+
+.export-range-arrow {
+  align-self: center;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.export-range-quick {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.export-range-quick-btn {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 6px 10px;
+  transition: all var(--duration) var(--ease);
+}
+
+.export-range-quick-btn:hover,
+.export-range-quick-btn.active {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.export-range-toolbar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.export-range-nav-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  line-height: 1;
+  transition: all var(--duration) var(--ease);
+}
+
+.export-range-nav-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent-light);
+  background: var(--accent-bg);
+}
+
+.export-range-month-selectors {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.export-range-dropdown {
+  position: relative;
+  min-width: 0;
+}
+
+.export-range-dropdown-trigger {
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0 12px;
+  outline: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 80px;
+  width: 100%;
+  transition: all var(--duration) var(--ease);
+}
+
+.export-range-dropdown-trigger:hover,
+.export-range-dropdown.open .export-range-dropdown-trigger {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+/* 覆盖全局伪元素，使小三角形作为普通 flex 元素跟随在文字后并一起居中 */
+.export-range-dropdown-trigger::after {
+  position: static !important;
+  transform: none !important;
+  margin-left: 5px;
+  margin-top: 2px;
+}
+
+.export-range-dropdown-caret {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+.export-range-dropdown-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  min-width: 80px;
+  display: none !important;
+  max-height: 248px;
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-lg);
+}
+
+.export-range-dropdown.open .export-range-dropdown-menu {
+  display: block !important;
+}
+
+.export-range-dropdown-menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.export-range-dropdown-menu::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-full);
+}
+
+.export-range-dropdown-option {
+  width: 100%;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 500;
+  text-align: center;
+}
+
+.export-range-dropdown-option:hover,
+.export-range-dropdown-option.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.export-range-calendars {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.export-calendar-month {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-card);
+  padding: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.export-calendar-title {
+  text-align: center;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 0.82rem;
+  margin-bottom: 10px;
+  letter-spacing: 0.04em;
+  font-family: var(--font-content);
+}
+
+.export-calendar-weekdays,
+.export-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.export-calendar-weekdays {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+.export-calendar-day {
+  min-width: 0;
+  aspect-ratio: 1;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--duration) var(--ease);
+}
+
+.export-calendar-day:not(.export-calendar-day-empty):hover {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.export-calendar-day.today {
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.export-calendar-day.in-range {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-radius: 0;
+}
+
+.export-calendar-day.range-start {
+  background: var(--accent) !important;
+  color: #fff !important;
+  font-weight: 700;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm) !important;
+  box-shadow: 0 2px 8px var(--accent-glow);
+}
+
+.export-calendar-day.range-end {
+  background: var(--accent) !important;
+  color: #fff !important;
+  font-weight: 700;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0 !important;
+  box-shadow: 0 2px 8px var(--accent-glow);
+}
+
+.export-calendar-day.range-start.range-end {
+  border-radius: var(--radius-sm) !important;
+}
+
+.export-calendar-day-empty {
+  pointer-events: none;
+}
+
+@media (max-width: 720px) {
+  .modal-box.modal-box-wide {
+    max-width: 400px;
+  }
+
+  .export-range-calendars {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 460px) {
+  .export-date-range-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .export-range-arrow {
+    display: none;
+  }
+
+  .export-range-toolbar {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .export-range-month-selectors {
+    gap: 6px;
+  }
+
+  .export-range-dropdown-trigger {
+    width: 100%;
+    min-width: 0;
+    padding: 0 8px;
+  }
 }
 
 .modal-info-box {
